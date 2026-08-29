@@ -1,0 +1,3 @@
+<?php
+use Illuminate\Database\Migrations\Migration; use Illuminate\Database\Schema\Blueprint; use Illuminate\Support\Facades\Schema;
+return new class extends Migration { public function up(): void { Schema::create('uom_ratios', function(Blueprint $t){ $t->id(); $t->string('source_database',30); $t->bigInteger('item_id'); $t->string('item_code',100); $t->string('item_name')->nullable(); $t->unsignedTinyInteger('uom_level'); $t->string('uom_code',50); $t->decimal('ratio',28,4); $t->timestamps(); $t->unique(['source_database','item_id','uom_level'],'uom_ratios_source_item_uom_unique'); $t->index(['source_database','item_code']); }); } public function down(): void { Schema::dropIfExists('uom_ratios'); } };

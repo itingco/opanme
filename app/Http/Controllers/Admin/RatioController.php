@@ -18,24 +18,66 @@ class RatioController extends Controller
 {
     public function index(Request $request): View
     {
-        $q = UomRatio::query()
-            ->orderBy('source_database')
-            ->orderBy('item_code')
-            ->orderBy('uom_level');
+        $search = trim((string) $request->input('q', ''));
+        $sourceDatabase = trim((string) $request->input('source_database', ''));
+        $uomLevel = $request->filled('uom_level') ? (string) $request->input('uom_level') : '';
+        $sort = (string) $request->input('sort', 'item_code');
+        $direction = strtolower((string) $request->input('direction', 'asc')) === 'desc' ? 'desc' : 'asc';
+        $perPage = (int) $request->input('per_page', 25);
+        $databases = [StockOpnameCycle::DB_INGCO, StockOpnameCycle::DB_SMI];
 
-        if ($request->filled('source_database')) {
-            $q->where('source_database', $request->string('source_database'));
+        if (! in_array($sourceDatabase, $databases, true)) {
+            $sourceDatabase = '';
         }
 
-        if ($request->filled('q')) {
-            $q->where(fn ($x) => $x
-                ->where('item_code', 'ilike', '%'.$request->string('q').'%')
-                ->orWhere('item_name', 'ilike', '%'.$request->string('q').'%'));
+        if (! in_array($uomLevel, ['1', '2', '3', '4'], true)) {
+            $uomLevel = '';
         }
+
+        if (! in_array($perPage, [10, 25, 50, 100], true)) {
+            $perPage = 25;
+        }
+
+        $sortColumns = [
+            'database' => 'source_database',
+            'item_code' => 'item_code',
+            'item_name' => 'item_name',
+            'uom_level' => 'uom_level',
+            'ratio' => 'ratio',
+            'updated_at' => 'updated_at',
+        ];
+
+        if (! array_key_exists($sort, $sortColumns)) {
+            $sort = 'item_code';
+        }
+
+        $ratios = UomRatio::query()
+            ->when($sourceDatabase !== '', fn ($query) => $query->where('source_database', $sourceDatabase))
+            ->when($uomLevel !== '', fn ($query) => $query->where('uom_level', (int) $uomLevel))
+            ->when($search !== '', function ($query) use ($search) {
+                $operator = $query->getConnection()->getDriverName() === 'pgsql' ? 'ilike' : 'like';
+
+                $query->where(function ($builder) use ($search, $operator) {
+                    $builder
+                        ->where('item_code', $operator, "%{$search}%")
+                        ->orWhere('item_name', $operator, "%{$search}%")
+                        ->orWhere('uom_code', $operator, "%{$search}%");
+                });
+            })
+            ->orderBy($sortColumns[$sort], $direction)
+            ->orderBy('id')
+            ->paginate($perPage)
+            ->withQueryString();
 
         return view('admin.ratios.index', [
-            'ratios' => $q->paginate(40)->withQueryString(),
-            'databases' => [StockOpnameCycle::DB_INGCO, StockOpnameCycle::DB_SMI],
+            'ratios' => $ratios,
+            'databases' => $databases,
+            'q' => $search,
+            'sourceDatabase' => $sourceDatabase,
+            'uomLevel' => $uomLevel,
+            'sort' => $sort,
+            'direction' => $direction,
+            'perPage' => $perPage,
         ]);
     }
 

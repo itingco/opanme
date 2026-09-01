@@ -10,7 +10,7 @@
     <span class="status large {{ strtolower($cycle->status) }}">{{ $cycle->status }}</span>
 </div>
 
-@if($cycle->closing_snapshot_error)
+@if($cycle->closing_snapshot_error && $cycle->status === \App\Models\StockOpnameCycle::STATUS_CLOSED)
     <div class="alert danger">
         Closing snapshot gagal: {{ $cycle->closing_snapshot_error }}
         <form class="inline-form" method="POST" action="{{ route('admin.cycles.retry-closing', $cycle) }}">
@@ -23,11 +23,57 @@
 @if($errors->has('override'))
     <div class="alert danger">{{ $errors->first('override') }}</div>
 @endif
+@if($errors->has('finalize'))
+    <div class="alert danger">{{ $errors->first('finalize') }}</div>
+@endif
+@if($errors->has('report'))
+    <div class="alert danger">{{ $errors->first('report') }}</div>
+@endif
 
-@if($cycle->status !== \App\Models\StockOpnameCycle::STATUS_CLOSED)
+@if(in_array($cycle->status, [\App\Models\StockOpnameCycle::STATUS_DRAFT, \App\Models\StockOpnameCycle::STATUS_OPEN], true))
     <div class="alert info-lite">
         Manual override baru dapat dilakukan setelah cycle CLOSED agar hasil scan checker sudah final. Export Excel tetap dapat digunakan kapan saja.
     </div>
+@endif
+
+@if($cycle->status === \App\Models\StockOpnameCycle::STATUS_CLOSED)
+    @if(!$cycle->closing_snapshot_error && $cycle->closing_snapshot_at)
+        <section class="panel finalization-panel">
+            <div class="finalization-copy">
+                <span class="finalization-icon">🔒</span>
+                <div>
+                    <h2>Siap masuk tahap FINAL</h2>
+                    <p>Periksa seluruh selisih dan override terlebih dahulu. Setelah difinalisasi, override tidak dapat ditambah, diedit, atau dihapus lagi dan closing snapshot tidak dapat diulang.</p>
+                </div>
+            </div>
+            <form method="POST" action="{{ route('admin.cycles.finalize', $cycle) }}" onsubmit="return confirm('FINALISASI PERMANEN? Setelah proses ini, seluruh hasil akan dikunci dan override tidak dapat diubah lagi.');">
+                @csrf
+                <input type="hidden" name="confirm_finalization" value="1">
+                <button class="btn finalize-btn" type="submit">🔒 Finalisasi Stock Opname</button>
+            </form>
+        </section>
+    @else
+        <div class="alert warning-lite">
+            <strong>Finalisasi belum dapat dilakukan.</strong> Closing Snapshot harus berhasil terlebih dahulu.
+        </div>
+    @endif
+@endif
+
+@if($cycle->status === \App\Models\StockOpnameCycle::STATUS_FINALIZED)
+    <section class="panel finalized-banner">
+        <div class="finalization-copy">
+            <span class="finalization-icon">✓</span>
+            <div>
+                <h2>Hasil sudah FINAL dan terkunci</h2>
+                <p>
+                    Difinalisasi {{ optional($cycle->finalized_at)->format('d/m/Y H:i:s') ?: '-' }}
+                    oleh <strong>{{ optional($cycle->finalizer)->name ?: 'Admin' }}</strong>.
+                    Seluruh data pada halaman ini hanya dapat dibaca.
+                </p>
+            </div>
+        </div>
+        <a class="btn primary" href="{{ route('admin.cycles.final-report', $cycle) }}">📄 Download Laporan Final PDF</a>
+    </section>
 @endif
 
 <div class="summary-toolbar panel compact-panel">
@@ -47,9 +93,14 @@
         <button class="btn" type="submit">Terapkan</button>
     </form>
 
-    <a class="btn excel-btn" href="{{ route('admin.cycles.summary.export', $cycle).(request()->getQueryString() ? '?'.request()->getQueryString() : '') }}">
-        Export Excel
-    </a>
+    <div class="summary-export-actions">
+        <a class="btn excel-btn" href="{{ route('admin.cycles.summary.export', $cycle).(request()->getQueryString() ? '?'.request()->getQueryString() : '') }}">
+            Export Excel
+        </a>
+        @if($cycle->status === \App\Models\StockOpnameCycle::STATUS_FINALIZED)
+            <a class="btn primary" href="{{ route('admin.cycles.final-report', $cycle) }}">Laporan Final PDF</a>
+        @endif
+    </div>
 </div>
 
 <section class="panel">
@@ -57,7 +108,7 @@
         <span><strong>Scan Fisik</strong> = hasil scanner asli</span>
         <span><strong>Final Fisik</strong> = Override jika ada, selain itu Scan Fisik</span>
         <span><strong>Variance</strong> = Final Fisik - Opening ERP</span>
-        @if($cycle->status === \App\Models\StockOpnameCycle::STATUS_CLOSED)
+        @if(in_array($cycle->status, [\App\Models\StockOpnameCycle::STATUS_CLOSED, \App\Models\StockOpnameCycle::STATUS_FINALIZED], true))
             <span><strong>Override / Audit</strong> = koreksi admin setelah recount</span>
         @endif
     </div>
@@ -140,6 +191,22 @@
                                         @endif
                                     </div>
                                 </details>
+                            @elseif($cycle->status === \App\Models\StockOpnameCycle::STATUS_FINALIZED)
+                                <div class="final-audit-readonly">
+                                    @if((int) $row->scan_count > 0)
+                                        <a href="{{ route('admin.cycles.scan-detail', [$cycle, $row->warehouse_id, $row->item_id]) }}">Detail scan ({{ number_format($row->scan_count) }})</a>
+                                    @else
+                                        <span class="muted">Tidak ada scan</span>
+                                    @endif
+
+                                    @if($hasOverride)
+                                        <strong>Override Final: {{ number_format((float) $row->override_qty, 4, '.', ',') }}</strong>
+                                        <small>{{ $row->override_by_name ?: 'Admin' }} · {{ $row->override_updated_at ? \Carbon\Carbon::parse($row->override_updated_at)->format('d/m/Y H:i:s') : '-' }}</small>
+                                        <p>{{ $row->override_comment }}</p>
+                                    @else
+                                        <small class="final-lock-label">🔒 Tidak ada override</small>
+                                    @endif
+                                </div>
                             @else
                                 <div class="audit-links">
                                     @if((int) $row->scan_count > 0)

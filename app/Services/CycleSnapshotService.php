@@ -6,6 +6,7 @@ use App\Models\StockOpnameCycle;
 use App\Models\StockSnapshot;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
+use UnexpectedValueException;
 
 class CycleSnapshotService
 {
@@ -54,6 +55,11 @@ class CycleSnapshotService
         $rows = $this->erpStock->snapshot($cycle->source_database, $snapshotAt->toDateString());
 
         return DB::transaction(function () use ($cycle, $snapshotAt, $warehouseMap, $rows): int {
+            $lockedCycle = StockOpnameCycle::query()->lockForUpdate()->findOrFail($cycle->id);
+            if ($lockedCycle->status !== StockOpnameCycle::STATUS_CLOSED) {
+                throw new UnexpectedValueException('Closing snapshot ditolak karena cycle sudah tidak berstatus CLOSED.');
+            }
+
             StockSnapshot::query()->where('cycle_id', $cycle->id)->update([
                 'closing_system_qty' => 0,
                 'closing_snapshot_at' => $snapshotAt,

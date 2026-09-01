@@ -39,6 +39,8 @@ Route::middleware(['auth','role:ADMIN'])->prefix('admin')->name('admin.')->group
     Route::post('/cycles/{cycle}/start', [CycleController::class,'start'])->name('cycles.start');
     Route::post('/cycles/{cycle}/close', [CycleController::class,'close'])->name('cycles.close');
     Route::post('/cycles/{cycle}/retry-closing', [CycleController::class,'retryClosing'])->name('cycles.retry-closing');
+    Route::post('/cycles/{cycle}/finalize', [CycleController::class,'finalize'])->name('cycles.finalize');
+    Route::get('/cycles/{cycle}/final-report', [CycleController::class,'finalReport'])->name('cycles.final-report');
     Route::get('/cycles/{cycle}/summary', [CycleController::class,'summary'])->name('cycles.summary');
     Route::get('/cycles/{cycle}/summary-export', [CycleController::class,'exportSummary'])->name('cycles.summary.export');
     Route::put('/cycles/{cycle}/summary/{warehouseId}/{itemId}/override', [CycleController::class,'saveOverride'])->name('cycles.summary.override');

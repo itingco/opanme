@@ -8,6 +8,7 @@ use App\Models\ScanTransaction;
 use App\Models\StockOpnameCycle;
 use App\Models\StockOpnameOverride;
 use App\Models\StockSnapshot;
+use App\Services\CycleFinalPdfService;
 use App\Services\CycleNumberService;
 use App\Services\CycleSnapshotService;
 use App\Services\CycleSummaryExcelService;
@@ -18,8 +19,10 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Symfony\Component\HttpFoundation\Response;
 use Throwable;
 
 class CycleController extends Controller
@@ -86,7 +89,7 @@ class CycleController extends Controller
 
     public function show(StockOpnameCycle $cycle): View
     {
-        $cycle->load(['warehouses', 'assignments.checker']);
+        $cycle->load(['warehouses', 'assignments.checker', 'finalizer']);
         $scanCount = ScanTransaction::where('cycle_id', $cycle->id)->count();
         $activeSessions = ScanSession::where('cycle_id', $cycle->id)
             ->whereNull('ended_at')
@@ -167,18 +170,90 @@ class CycleController extends Controller
         $at = $cycle->completed_at ?? now();
         try {
             $snapshots->captureClosing($cycle, $at);
-            $cycle->update([
-                'closing_snapshot_at' => now(),
-                'closing_snapshot_error' => null,
-            ]);
+
+            $updated = StockOpnameCycle::query()
+                ->whereKey($cycle->id)
+                ->where('status', StockOpnameCycle::STATUS_CLOSED)
+                ->update([
+                    'closing_snapshot_at' => now(),
+                    'closing_snapshot_error' => null,
+                ]);
+
+            if ($updated === 0) {
+                return back()->withErrors(['cycle' => 'Cycle sudah berubah status dan closing snapshot tidak dapat di-retry lagi.']);
+            }
 
             return back()->with('success', 'Closing snapshot berhasil diperbarui.');
         } catch (Throwable $e) {
             report($e);
-            $cycle->update(['closing_snapshot_error' => $e->getMessage()]);
+
+            StockOpnameCycle::query()
+                ->whereKey($cycle->id)
+                ->where('status', StockOpnameCycle::STATUS_CLOSED)
+                ->update(['closing_snapshot_error' => $e->getMessage()]);
+
+            if ($cycle->fresh()->status === StockOpnameCycle::STATUS_FINALIZED) {
+                return back()->withErrors(['cycle' => 'Cycle sudah FINALIZED. Closing snapshot terkunci dan tidak dapat di-retry lagi.']);
+            }
 
             return back()->withErrors(['cycle' => 'Closing snapshot masih gagal: '.$e->getMessage()]);
         }
+    }
+
+    public function finalize(Request $request, StockOpnameCycle $cycle): RedirectResponse
+    {
+        $request->validate([
+            'confirm_finalization' => ['required', 'accepted'],
+        ]);
+
+        DB::transaction(function () use ($cycle, $request): void {
+            $locked = StockOpnameCycle::query()->lockForUpdate()->findOrFail($cycle->id);
+
+            if ($locked->status !== StockOpnameCycle::STATUS_CLOSED) {
+                throw ValidationException::withMessages([
+                    'finalize' => 'Hanya cycle CLOSED yang dapat difinalisasi.',
+                ]);
+            }
+
+            if ($locked->closing_snapshot_error || ! $locked->closing_snapshot_at) {
+                throw ValidationException::withMessages([
+                    'finalize' => 'Finalisasi ditolak karena closing snapshot belum berhasil. Jalankan Retry Closing Snapshot terlebih dahulu.',
+                ]);
+            }
+
+            $locked->update([
+                'status' => StockOpnameCycle::STATUS_FINALIZED,
+                'finalized_at' => now(),
+                'finalized_by' => $request->user()->id,
+            ]);
+        });
+
+        return redirect()
+            ->route('admin.cycles.summary', $cycle)
+            ->with('success', 'Cycle berhasil difinalisasi. Seluruh hasil sekarang terkunci permanen dan tidak dapat di-override lagi.');
+    }
+
+    public function finalReport(
+        StockOpnameCycle $cycle,
+        CycleSummaryService $summary,
+        CycleFinalPdfService $pdf
+    ): Response {
+        if ($cycle->status !== StockOpnameCycle::STATUS_FINALIZED) {
+            return redirect()
+                ->route('admin.cycles.summary', $cycle)
+                ->withErrors(['report' => 'Laporan Final PDF hanya tersedia setelah cycle berstatus FINALIZED.']);
+        }
+
+        $cycle->loadMissing(['finalizer', 'assignments.checker', 'assignments.warehouse']);
+        $contents = $pdf->render($cycle, $summary->query($cycle)->cursor());
+        $filename = $cycle->cycle_no.'-FINAL.pdf';
+
+        return response($contents, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="'.$filename.'"',
+            'Content-Length' => (string) strlen($contents),
+            'Cache-Control' => 'private, no-store, max-age=0',
+        ]);
     }
 
     public function summary(Request $request, StockOpnameCycle $cycle, CycleSummaryService $summary): View
@@ -190,7 +265,7 @@ class CycleController extends Controller
             ->withQueryString();
 
         return view('admin.cycles.summary', [
-            'cycle' => $cycle->load('warehouses'),
+            'cycle' => $cycle->load(['warehouses', 'finalizer']),
             'rows' => $rows,
             'warehouseId' => $warehouseId,
             'varianceOnly' => $varianceOnly,
@@ -231,15 +306,6 @@ class CycleController extends Controller
         int $warehouseId,
         int $itemId
     ): RedirectResponse {
-        if ($cycle->status !== StockOpnameCycle::STATUS_CLOSED) {
-            return back()->withErrors([
-                'override' => 'Override hanya dapat dilakukan setelah cycle CLOSED agar hasil scan tidak berubah lagi.',
-            ]);
-        }
-
-        $warehouse = $cycle->warehouses()->findOrFail($warehouseId);
-        $this->ensureSummaryItemExists($cycle, $warehouse->id, $itemId);
-
         $data = $request->validate([
             'override_qty' => ['required', 'numeric', 'min:0'],
             'comment' => ['required', 'string', 'max:2000'],
@@ -247,18 +313,35 @@ class CycleController extends Controller
             'comment.required' => 'Comment wajib diisi untuk setiap override.',
         ]);
 
-        StockOpnameOverride::updateOrCreate(
-            [
-                'cycle_id' => $cycle->id,
-                'warehouse_id' => $warehouse->id,
-                'item_id' => $itemId,
-            ],
-            [
-                'override_qty' => $data['override_qty'],
-                'comment' => trim($data['comment']),
-                'updated_by' => $request->user()->id,
-            ]
-        );
+        DB::transaction(function () use ($cycle, $warehouseId, $itemId, $data, $request): void {
+            $locked = StockOpnameCycle::query()->lockForUpdate()->findOrFail($cycle->id);
+            if ($locked->status === StockOpnameCycle::STATUS_FINALIZED) {
+                throw ValidationException::withMessages([
+                    'override' => 'Cycle sudah FINALIZED. Override terkunci permanen dan tidak dapat diubah lagi.',
+                ]);
+            }
+            if ($locked->status !== StockOpnameCycle::STATUS_CLOSED) {
+                throw ValidationException::withMessages([
+                    'override' => 'Override hanya dapat dilakukan setelah cycle CLOSED agar hasil scan tidak berubah lagi.',
+                ]);
+            }
+
+            $warehouse = $locked->warehouses()->findOrFail($warehouseId);
+            $this->ensureSummaryItemExists($locked, $warehouse->id, $itemId);
+
+            StockOpnameOverride::updateOrCreate(
+                [
+                    'cycle_id' => $locked->id,
+                    'warehouse_id' => $warehouse->id,
+                    'item_id' => $itemId,
+                ],
+                [
+                    'override_qty' => $data['override_qty'],
+                    'comment' => trim($data['comment']),
+                    'updated_by' => $request->user()->id,
+                ]
+            );
+        });
 
         return back()->with('success', 'Override fisik berhasil disimpan. Hasil scan asli tidak diubah.');
     }
@@ -268,18 +351,26 @@ class CycleController extends Controller
         int $warehouseId,
         int $itemId
     ): RedirectResponse {
-        if ($cycle->status !== StockOpnameCycle::STATUS_CLOSED) {
-            return back()->withErrors([
-                'override' => 'Override hanya dapat dihapus setelah cycle CLOSED.',
-            ]);
-        }
+        DB::transaction(function () use ($cycle, $warehouseId, $itemId): void {
+            $locked = StockOpnameCycle::query()->lockForUpdate()->findOrFail($cycle->id);
+            if ($locked->status === StockOpnameCycle::STATUS_FINALIZED) {
+                throw ValidationException::withMessages([
+                    'override' => 'Cycle sudah FINALIZED. Override terkunci permanen dan tidak dapat dihapus.',
+                ]);
+            }
+            if ($locked->status !== StockOpnameCycle::STATUS_CLOSED) {
+                throw ValidationException::withMessages([
+                    'override' => 'Override hanya dapat dihapus setelah cycle CLOSED.',
+                ]);
+            }
 
-        $warehouse = $cycle->warehouses()->findOrFail($warehouseId);
-        StockOpnameOverride::query()
-            ->where('cycle_id', $cycle->id)
-            ->where('warehouse_id', $warehouse->id)
-            ->where('item_id', $itemId)
-            ->delete();
+            $warehouse = $locked->warehouses()->findOrFail($warehouseId);
+            StockOpnameOverride::query()
+                ->where('cycle_id', $locked->id)
+                ->where('warehouse_id', $warehouse->id)
+                ->where('item_id', $itemId)
+                ->delete();
+        });
 
         return back()->with('success', 'Override dihapus. Final fisik kembali memakai hasil scan asli.');
     }

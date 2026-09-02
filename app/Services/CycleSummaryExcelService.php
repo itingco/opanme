@@ -45,10 +45,12 @@ class CycleSummaryExcelService
         }
 
         $headers = [
+            'Row Type',
             'Warehouse Code',
             'Warehouse Name',
             'Item Code',
             'Item Name',
+            'Smallest UOM',
             'Opening ERP',
             'Scan Fisik',
             'Override',
@@ -58,6 +60,9 @@ class CycleSummaryExcelService
             'Net Movement',
             'Scan Count',
             'Movement Status',
+            'Override Input Qty',
+            'Override Input UOM',
+            'Override Ratio',
             'Comment Override',
             'Override By',
             'Override At',
@@ -68,7 +73,7 @@ class CycleSummaryExcelService
         fwrite($handle, '<sheetViews><sheetView workbookViewId="0"><pane ySplit="6" topLeftCell="A7" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>');
         fwrite($handle, '<sheetFormatPr defaultRowHeight="15"/>');
         fwrite($handle, '<cols>');
-        $widths = [16, 24, 18, 38, 16, 16, 16, 16, 16, 16, 16, 12, 18, 42, 20, 22];
+        $widths = [14, 16, 24, 18, 38, 14, 16, 16, 16, 16, 16, 16, 16, 12, 18, 18, 18, 16, 42, 20, 22];
         foreach ($widths as $index => $width) {
             $col = $index + 1;
             fwrite($handle, '<col min="'.$col.'" max="'.$col.'" width="'.$width.'" customWidth="1"/>');
@@ -100,10 +105,12 @@ class CycleSummaryExcelService
             $hasOverride = $row->override_qty !== null;
 
             $this->writeRow($handle, $rowNumber, [
+                ['value' => $row->row_type === 'NON_SYSTEM' ? 'NON-SYSTEM' : 'ERP'],
                 ['value' => $row->warehouse_code],
                 ['value' => $row->warehouse_name],
                 ['value' => $row->item_code],
                 ['value' => $row->item_name, 'style' => 5],
+                ['value' => $row->smallest_uom_code ?: ''],
                 ['value' => (float) $row->opening_system_qty, 'style' => 2, 'number' => true],
                 ['value' => (float) $row->physical_qty, 'style' => 2, 'number' => true],
                 $hasOverride ? ['value' => (float) $row->override_qty, 'style' => 2, 'number' => true] : null,
@@ -113,6 +120,9 @@ class CycleSummaryExcelService
                 $movementKnown ? ['value' => (float) $row->movement_qty, 'style' => 2, 'number' => true] : null,
                 ['value' => (int) $row->scan_count, 'style' => 6, 'number' => true],
                 ['value' => $movementKnown ? ($hasMovement ? 'ADA MOVEMENT' : 'TIDAK ADA') : 'BELUM ADA'],
+                $row->override_input_qty !== null ? ['value' => (float) $row->override_input_qty, 'style' => 2, 'number' => true] : null,
+                ['value' => $row->override_input_uom_code ?: ''],
+                $row->override_ratio_used !== null ? ['value' => (float) $row->override_ratio_used, 'style' => 2, 'number' => true] : null,
                 ['value' => $row->override_comment ?: '', 'style' => 5],
                 ['value' => $row->override_by_name ?: ''],
                 ['value' => $row->override_updated_at ? $this->dateTimeText($row->override_updated_at) : ''],
@@ -125,9 +135,9 @@ class CycleSummaryExcelService
         // SpreadsheetML CT_Worksheet requires autoFilter before mergeCells.
         // Writing these in the opposite order makes Microsoft Excel repair the workbook.
         if ($rowNumber > 7) {
-            fwrite($handle, '<autoFilter ref="A6:P'.($rowNumber - 1).'"/>');
+            fwrite($handle, '<autoFilter ref="A6:U'.($rowNumber - 1).'"/>');
         }
-        fwrite($handle, '<mergeCells count="1"><mergeCell ref="A1:P1"/></mergeCells>');
+        fwrite($handle, '<mergeCells count="1"><mergeCell ref="A1:U1"/></mergeCells>');
         fwrite($handle, '</worksheet>');
         fclose($handle);
 

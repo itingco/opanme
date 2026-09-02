@@ -3,9 +3,12 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\DiscoveredScanTransaction;
 use App\Models\ScanSession;
 use App\Models\ScanTransaction;
 use App\Models\StockOpnameCycle;
+use App\Models\StockOpnameDiscoveredItem;
+use App\Models\StockOpnameDiscoveredOverride;
 use App\Models\StockOpnameOverride;
 use App\Models\StockSnapshot;
 use App\Services\CycleFinalPdfService;
@@ -14,6 +17,7 @@ use App\Services\CycleSnapshotService;
 use App\Services\CycleSummaryExcelService;
 use App\Services\CycleSummaryService;
 use App\Services\ErpCatalogService;
+use App\Services\NonSystemQtyService;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -24,6 +28,7 @@ use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\Response;
 use Throwable;
+use UnexpectedValueException;
 
 class CycleController extends Controller
 {
@@ -90,7 +95,8 @@ class CycleController extends Controller
     public function show(StockOpnameCycle $cycle): View
     {
         $cycle->load(['warehouses', 'assignments.checker', 'finalizer']);
-        $scanCount = ScanTransaction::where('cycle_id', $cycle->id)->count();
+        $scanCount = ScanTransaction::where('cycle_id', $cycle->id)->count()
+            + DiscoveredScanTransaction::where('cycle_id', $cycle->id)->count();
         $activeSessions = ScanSession::where('cycle_id', $cycle->id)
             ->whereNull('ended_at')
             ->with(['checker', 'warehouse'])
@@ -375,6 +381,207 @@ class CycleController extends Controller
         return back()->with('success', 'Override dihapus. Final fisik kembali memakai hasil scan asli.');
     }
 
+    public function createDiscoveredOverride(
+        Request $request,
+        StockOpnameCycle $cycle,
+        NonSystemQtyService $qtyService,
+        ErpCatalogService $erp
+    ): RedirectResponse {
+        $data = $request->validate([
+            'warehouse_id' => ['required', 'integer'],
+            'barcode' => ['required', 'string', 'max:150'],
+            'item_name' => ['required', 'string', 'max:255'],
+            'qty' => ['required', 'numeric', 'min:0'],
+            'uom_code' => ['required', 'string', 'max:50'],
+            'smallest_uom_code' => ['required', 'string', 'max:50'],
+            'ratio_to_smallest' => ['required', 'numeric', 'gt:0'],
+            'comment' => ['required', 'string', 'max:2000'],
+        ], [
+            'comment.required' => 'Comment wajib diisi untuk barang Non-System.',
+        ]);
+
+        $barcode = trim($data['barcode']);
+        try {
+            $erpItem = $erp->findBarcode($cycle->source_database, $barcode);
+        } catch (UnexpectedValueException $e) {
+            throw ValidationException::withMessages(['non_system' => $e->getMessage()]);
+        }
+        if ($erpItem) {
+            throw ValidationException::withMessages([
+                'non_system' => 'Barcode tersebut sudah ada di ERP dan harus diproses sebagai item normal.',
+            ]);
+        }
+
+        $uomCode = $this->normalizeUom($data['uom_code']);
+        $smallestUomCode = $this->normalizeUom($data['smallest_uom_code']);
+        $ratio = $uomCode === $smallestUomCode ? 1.0 : (float) $data['ratio_to_smallest'];
+        $overrideQty = $qtyService->toSmallest($data['qty'], $ratio);
+
+        DB::transaction(function () use ($cycle, $request, $data, $barcode, $uomCode, $smallestUomCode, $ratio, $overrideQty): void {
+            $locked = StockOpnameCycle::query()->lockForUpdate()->findOrFail($cycle->id);
+            $this->assertClosedForOverride($locked);
+
+            $warehouse = $locked->warehouses()->findOrFail((int) $data['warehouse_id']);
+            $item = StockOpnameDiscoveredItem::query()
+                ->where('cycle_id', $locked->id)
+                ->where('alias_code', $barcode)
+                ->lockForUpdate()
+                ->first();
+
+            if (! $item) {
+                $item = StockOpnameDiscoveredItem::create([
+                    'cycle_id' => $locked->id,
+                    'alias_code' => $barcode,
+                    'item_name' => trim($data['item_name']),
+                    'default_uom_code' => $uomCode,
+                    'smallest_uom_code' => $smallestUomCode,
+                    'default_ratio_to_smallest' => $ratio,
+                    'created_by' => $request->user()->id,
+                ]);
+            } else {
+                $item->update([
+                    'item_name' => trim($data['item_name']),
+                    'default_uom_code' => $uomCode,
+                    'smallest_uom_code' => $smallestUomCode,
+                    'default_ratio_to_smallest' => $ratio,
+                ]);
+            }
+
+            StockOpnameDiscoveredOverride::updateOrCreate(
+                [
+                    'cycle_id' => $locked->id,
+                    'warehouse_id' => $warehouse->id,
+                    'discovered_item_id' => $item->id,
+                ],
+                [
+                    'input_qty' => $data['qty'],
+                    'input_uom_code' => $uomCode,
+                    'smallest_uom_code' => $smallestUomCode,
+                    'ratio_used' => $ratio,
+                    'override_qty' => $overrideQty,
+                    'comment' => trim($data['comment']),
+                    'updated_by' => $request->user()->id,
+                ]
+            );
+        });
+
+        return back()->with('success', 'Barang Non-System berhasil ditambahkan ke hasil opname dan dicatat sebagai override admin.');
+    }
+
+    public function saveDiscoveredOverride(
+        Request $request,
+        StockOpnameCycle $cycle,
+        int $warehouseId,
+        int $discoveredItemId,
+        NonSystemQtyService $qtyService
+    ): RedirectResponse {
+        $data = $request->validate([
+            'qty' => ['required', 'numeric', 'min:0'],
+            'uom_code' => ['required', 'string', 'max:50'],
+            'smallest_uom_code' => ['required', 'string', 'max:50'],
+            'ratio_to_smallest' => ['required', 'numeric', 'gt:0'],
+            'comment' => ['required', 'string', 'max:2000'],
+        ], [
+            'comment.required' => 'Comment wajib diisi untuk setiap override.',
+        ]);
+
+        $uomCode = $this->normalizeUom($data['uom_code']);
+        $smallestUomCode = $this->normalizeUom($data['smallest_uom_code']);
+        $ratio = $uomCode === $smallestUomCode ? 1.0 : (float) $data['ratio_to_smallest'];
+        $overrideQty = $qtyService->toSmallest($data['qty'], $ratio);
+
+        DB::transaction(function () use ($cycle, $warehouseId, $discoveredItemId, $request, $data, $uomCode, $smallestUomCode, $ratio, $overrideQty): void {
+            $locked = StockOpnameCycle::query()->lockForUpdate()->findOrFail($cycle->id);
+            $this->assertClosedForOverride($locked);
+
+            $warehouse = $locked->warehouses()->findOrFail($warehouseId);
+            $item = StockOpnameDiscoveredItem::query()
+                ->where('cycle_id', $locked->id)
+                ->findOrFail($discoveredItemId);
+
+            $item->update([
+                'default_uom_code' => $uomCode,
+                'smallest_uom_code' => $smallestUomCode,
+                'default_ratio_to_smallest' => $ratio,
+            ]);
+
+            StockOpnameDiscoveredOverride::updateOrCreate(
+                [
+                    'cycle_id' => $locked->id,
+                    'warehouse_id' => $warehouse->id,
+                    'discovered_item_id' => $item->id,
+                ],
+                [
+                    'input_qty' => $data['qty'],
+                    'input_uom_code' => $uomCode,
+                    'smallest_uom_code' => $smallestUomCode,
+                    'ratio_used' => $ratio,
+                    'override_qty' => $overrideQty,
+                    'comment' => trim($data['comment']),
+                    'updated_by' => $request->user()->id,
+                ]
+            );
+        });
+
+        return back()->with('success', 'Override barang Non-System berhasil disimpan.');
+    }
+
+    public function deleteDiscoveredOverride(
+        StockOpnameCycle $cycle,
+        int $warehouseId,
+        int $discoveredItemId
+    ): RedirectResponse {
+        DB::transaction(function () use ($cycle, $warehouseId, $discoveredItemId): void {
+            $locked = StockOpnameCycle::query()->lockForUpdate()->findOrFail($cycle->id);
+            $this->assertClosedForOverride($locked);
+
+            $warehouse = $locked->warehouses()->findOrFail($warehouseId);
+            $item = StockOpnameDiscoveredItem::query()
+                ->where('cycle_id', $locked->id)
+                ->findOrFail($discoveredItemId);
+
+            StockOpnameDiscoveredOverride::query()
+                ->where('cycle_id', $locked->id)
+                ->where('warehouse_id', $warehouse->id)
+                ->where('discovered_item_id', $item->id)
+                ->delete();
+
+            $hasScans = DiscoveredScanTransaction::query()
+                ->where('cycle_id', $locked->id)
+                ->where('discovered_item_id', $item->id)
+                ->exists();
+            $hasOverrides = StockOpnameDiscoveredOverride::query()
+                ->where('cycle_id', $locked->id)
+                ->where('discovered_item_id', $item->id)
+                ->exists();
+            if (! $hasScans && ! $hasOverrides) {
+                $item->delete();
+            }
+        });
+
+        return back()->with('success', 'Override Non-System dihapus. Jika ada scan checker, Final Fisik kembali memakai hasil scan.');
+    }
+
+    public function scanDetailNonSystem(
+        StockOpnameCycle $cycle,
+        int $warehouseId,
+        int $discoveredItemId
+    ): View {
+        $warehouse = $cycle->warehouses()->findOrFail($warehouseId);
+        $nonSystemItem = StockOpnameDiscoveredItem::query()
+            ->where('cycle_id', $cycle->id)
+            ->findOrFail($discoveredItemId);
+        $scans = DiscoveredScanTransaction::query()
+            ->where('cycle_id', $cycle->id)
+            ->where('warehouse_id', $warehouse->id)
+            ->where('discovered_item_id', $nonSystemItem->id)
+            ->with('checker')
+            ->orderBy('scanned_at')
+            ->get();
+
+        return view('admin.cycles.scan-detail', compact('cycle', 'warehouse', 'scans', 'nonSystemItem'));
+    }
+
     public function scanDetail(StockOpnameCycle $cycle, int $warehouseId, int $itemId): View
     {
         $warehouse = $cycle->warehouses()->findOrFail($warehouseId);
@@ -389,6 +596,30 @@ class CycleController extends Controller
         abort_if($scans->isEmpty(), 404);
 
         return view('admin.cycles.scan-detail', compact('cycle', 'warehouse', 'scans'));
+    }
+
+    private function assertClosedForOverride(StockOpnameCycle $cycle): void
+    {
+        if ($cycle->status === StockOpnameCycle::STATUS_FINALIZED) {
+            throw ValidationException::withMessages([
+                'override' => 'Cycle sudah FINALIZED. Seluruh koreksi terkunci permanen.',
+            ]);
+        }
+        if ($cycle->status !== StockOpnameCycle::STATUS_CLOSED) {
+            throw ValidationException::withMessages([
+                'override' => 'Override hanya dapat dilakukan setelah cycle CLOSED.',
+            ]);
+        }
+    }
+
+    private function normalizeUom(string $value): string
+    {
+        $value = strtoupper(trim($value));
+        if ($value === '') {
+            throw ValidationException::withMessages(['non_system' => 'UOM wajib diisi.']);
+        }
+
+        return substr($value, 0, 50);
     }
 
     private function ensureSummaryItemExists(StockOpnameCycle $cycle, int $warehouseId, int $itemId): void

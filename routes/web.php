@@ -43,6 +43,10 @@ Route::middleware(['auth','role:ADMIN'])->prefix('admin')->name('admin.')->group
     Route::get('/cycles/{cycle}/final-report', [CycleController::class,'finalReport'])->name('cycles.final-report');
     Route::get('/cycles/{cycle}/summary', [CycleController::class,'summary'])->name('cycles.summary');
     Route::get('/cycles/{cycle}/summary-export', [CycleController::class,'exportSummary'])->name('cycles.summary.export');
+    Route::post('/cycles/{cycle}/summary/non-system/override', [CycleController::class,'createDiscoveredOverride'])->name('cycles.summary.non-system.store');
+    Route::put('/cycles/{cycle}/summary/non-system/{warehouseId}/{discoveredItemId}/override', [CycleController::class,'saveDiscoveredOverride'])->name('cycles.summary.non-system.override');
+    Route::delete('/cycles/{cycle}/summary/non-system/{warehouseId}/{discoveredItemId}/override', [CycleController::class,'deleteDiscoveredOverride'])->name('cycles.summary.non-system.override.destroy');
+    Route::get('/cycles/{cycle}/summary/non-system/{warehouseId}/{discoveredItemId}', [CycleController::class,'scanDetailNonSystem'])->name('cycles.scan-detail.non-system');
     Route::put('/cycles/{cycle}/summary/{warehouseId}/{itemId}/override', [CycleController::class,'saveOverride'])->name('cycles.summary.override');
     Route::delete('/cycles/{cycle}/summary/{warehouseId}/{itemId}/override', [CycleController::class,'deleteOverride'])->name('cycles.summary.override.destroy');
     Route::get('/cycles/{cycle}/summary/{warehouseId}/{itemId}', [CycleController::class,'scanDetail'])->name('cycles.scan-detail');
@@ -53,4 +57,5 @@ Route::middleware(['auth','role:CHECKER'])->prefix('checker')->name('checker.')-
     Route::post('/cycles/{cycle}/warehouses/{warehouseId}/session', [CheckerController::class,'startSession'])->name('session.start');
     Route::get('/sessions/{session}/scan', [CheckerController::class,'scanPage'])->name('scan');
     Route::post('/sessions/{session}/scan', [ScanController::class,'store'])->name('scan.store');
+    Route::post('/sessions/{session}/scan/non-system', [ScanController::class,'storeNonSystem'])->name('scan.non-system');
 });

@@ -58,9 +58,8 @@ class ScanService
         }
 
         $ratio = UomRatio::query()
-            ->where('source_database', $session->cycle->source_database)
-            ->where('item_id', $item['item_id'])
-            ->where('uom_level', $item['uom_level'])
+            ->where('item_code', strtoupper(trim((string) $item['item_code'])))
+            ->where('uom_code', strtoupper(trim((string) $item['uom_code'])))
             ->first();
 
         if (! $ratio) {

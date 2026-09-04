@@ -10,14 +10,14 @@
         return route('admin.ratios.index', $params);
     };
     $sortMark = fn (string $column) => $sort === $column ? ($direction === 'asc' ? '↑' : '↓') : '↕';
-    $hasFilters = $q !== '' || $sourceDatabase !== '' || $uomLevel !== '';
+    $hasFilters = $q !== '';
 @endphp
 
 <div class="page-heading master-page-heading">
     <div>
         <div class="heading-eyebrow">Master Data</div>
         <h1>Master UOM Ratio</h1>
-        <p>Kelola konversi hasil scan ke smallest UOM untuk setiap item dan database.</p>
+        <p>Berlaku untuk AS_INGCO dan AS_SMI. Satu ratio disimpan berdasarkan ItemCode + UOM.</p>
     </div>
     <div class="heading-actions">
         <a class="btn" href="{{ route('admin.ratios.template') }}">Download Template</a>
@@ -46,10 +46,15 @@
                 <summary>Lihat detail baris gagal</summary>
                 <div class="table-wrap compact-table">
                     <table>
-                        <thead><tr><th>Row</th><th>Barcode</th><th>Keterangan</th></tr></thead>
+                        <thead><tr><th>Row</th><th>ItemCode</th><th>UOM</th><th>Keterangan</th></tr></thead>
                         <tbody>
                             @foreach($importResult['errors'] as $error)
-                                <tr><td>{{ $error['row'] }}</td><td>{{ $error['barcode'] ?: '-' }}</td><td>{{ $error['message'] }}</td></tr>
+                                <tr>
+                                    <td>{{ $error['row'] }}</td>
+                                    <td>{{ $error['item_code'] ?: '-' }}</td>
+                                    <td>{{ $error['uom_code'] ?: '-' }}</td>
+                                    <td>{{ $error['message'] }}</td>
+                                </tr>
                             @endforeach
                         </tbody>
                     </table>
@@ -64,7 +69,7 @@
         <div class="import-icon">XLSX</div>
         <div>
             <h2>Import Ratio dari Excel</h2>
-            <p>Upload format <strong>Database + Barcode ERP + Ratio</strong>. Item dan UOM akan dicocokkan otomatis.</p>
+            <p>Upload format <strong>ItemCode + UOM + Ratio</strong>. Tidak perlu database dan tidak perlu barcode.</p>
         </div>
     </div>
     <form method="POST" action="{{ route('admin.ratios.import') }}" enctype="multipart/form-data" class="ratio-import-form ratio-import-inline">
@@ -88,31 +93,11 @@
         <input type="hidden" name="direction" value="{{ $direction }}">
 
         <label class="filter-search filter-field-wide">
-            <span class="filter-label">Cari Item</span>
+            <span class="filter-label">Cari Item / UOM</span>
             <div class="filter-input-with-icon">
                 <span aria-hidden="true">⌕</span>
-                <input type="search" name="q" value="{{ $q }}" placeholder="Item code, nama atau UOM..." autocomplete="off">
+                <input type="search" name="q" value="{{ $q }}" placeholder="Contoh: CHPTB8703 atau KTK" autocomplete="off">
             </div>
-        </label>
-
-        <label class="filter-field">
-            <span class="filter-label">Database</span>
-            <select name="source_database">
-                <option value="">Semua DB</option>
-                @foreach($databases as $db)
-                    <option value="{{ $db }}" @selected($sourceDatabase === $db)>{{ $db }}</option>
-                @endforeach
-            </select>
-        </label>
-
-        <label class="filter-field">
-            <span class="filter-label">UOM Level</span>
-            <select name="uom_level">
-                <option value="">Semua Level</option>
-                @foreach([1,2,3,4] as $level)
-                    <option value="{{ $level }}" @selected($uomLevel === (string)$level)>Level {{ $level }}</option>
-                @endforeach
-            </select>
         </label>
 
         <label class="filter-field filter-per-page">
@@ -135,11 +120,10 @@
             <thead>
                 <tr>
                     <th class="row-number-col">No</th>
-                    <th><a class="sortable-th" data-sort="database" href="{{ $sortUrl('database') }}">Database <span>{{ $sortMark('database') }}</span></a></th>
-                    <th><a class="sortable-th" data-sort="item_code" href="{{ $sortUrl('item_code') }}">Item <span>{{ $sortMark('item_code') }}</span></a></th>
-                    <th><a class="sortable-th" data-sort="uom_level" href="{{ $sortUrl('uom_level') }}">UOM <span>{{ $sortMark('uom_level') }}</span></a></th>
-                    <th class="num"><a class="sortable-th align-right" data-sort="ratio" href="{{ $sortUrl('ratio') }}">Ratio <span>{{ $sortMark('ratio') }}</span></a></th>
-                    <th><a class="sortable-th" data-sort="updated_at" href="{{ $sortUrl('updated_at') }}">Update <span>{{ $sortMark('updated_at') }}</span></a></th>
+                    <th><a class="sortable-th" href="{{ $sortUrl('item_code') }}">ItemCode <span>{{ $sortMark('item_code') }}</span></a></th>
+                    <th><a class="sortable-th" href="{{ $sortUrl('uom_code') }}">UOM <span>{{ $sortMark('uom_code') }}</span></a></th>
+                    <th class="num"><a class="sortable-th align-right" href="{{ $sortUrl('ratio') }}">Ratio <span>{{ $sortMark('ratio') }}</span></a></th>
+                    <th><a class="sortable-th" href="{{ $sortUrl('updated_at') }}">Update <span>{{ $sortMark('updated_at') }}</span></a></th>
                     <th class="action-col">Aksi</th>
                 </tr>
             </thead>
@@ -147,16 +131,8 @@
             @forelse($ratios as $ratio)
                 <tr>
                     <td data-label="No" class="row-number">{{ number_format(($ratios->firstItem() ?? 1) + $loop->index) }}</td>
-                    <td data-label="Database"><span class="database-badge">{{ $ratio->source_database }}</span></td>
-                    <td data-label="Item">
-                        <div class="item-cell">
-                            <strong>{{ $ratio->item_code }}</strong>
-                            <small>{{ $ratio->item_name ?: '-' }}</small>
-                        </div>
-                    </td>
-                    <td data-label="UOM">
-                        <span class="uom-chip"><strong>{{ $ratio->uom_code }}</strong><small>Level {{ $ratio->uom_level }}</small></span>
-                    </td>
+                    <td data-label="ItemCode"><strong>{{ $ratio->item_code }}</strong></td>
+                    <td data-label="UOM"><span class="uom-chip"><strong>{{ $ratio->uom_code }}</strong></span></td>
                     <td data-label="Ratio" class="num ratio-value">{{ rtrim(rtrim(number_format((float)$ratio->ratio,4,'.',','),'0'),'.') }}</td>
                     <td data-label="Update" class="updated-cell">
                         <strong>{{ optional($ratio->updated_at)->format('d M Y') ?: '-' }}</strong>
@@ -168,11 +144,7 @@
                                 type="button"
                                 class="btn small"
                                 data-ratio-edit
-                                data-db="{{ $ratio->source_database }}"
-                                data-item-id="{{ $ratio->item_id }}"
                                 data-item-code="{{ $ratio->item_code }}"
-                                data-item-name="{{ $ratio->item_name }}"
-                                data-uom-level="{{ $ratio->uom_level }}"
                                 data-uom-code="{{ $ratio->uom_code }}"
                                 data-ratio="{{ $ratio->ratio }}"
                             >Edit</button>
@@ -185,9 +157,9 @@
                 </tr>
             @empty
                 <tr>
-                    <td colspan="7" class="empty table-empty-state">
+                    <td colspan="6" class="empty table-empty-state">
                         <strong>{{ $hasFilters ? 'Ratio tidak ditemukan' : 'Belum ada data ratio' }}</strong>
-                        <span>{{ $hasFilters ? 'Ubah kata kunci/filter atau tekan Reset.' : 'Tambah ratio manual atau import dari Excel.' }}</span>
+                        <span>{{ $hasFilters ? 'Ubah kata kunci atau tekan Reset.' : 'Tambah ratio manual atau import dari Excel.' }}</span>
                     </td>
                 </tr>
             @endforelse
@@ -205,31 +177,19 @@
             <div>
                 <span class="modal-eyebrow">Master Ratio</span>
                 <h2 id="ratio-modal-title">Tambah Ratio</h2>
-                <p id="ratio-modal-description">Cari barcode ERP untuk mengisi item dan UOM secara otomatis.</p>
+                <p>Ratio selalu dihitung ke smallest UOM item tersebut.</p>
             </div>
             <button type="button" class="user-modal-close" data-ratio-close aria-label="Tutup modal">×</button>
         </div>
 
         <form method="POST" action="{{ route('admin.ratios.store') }}" class="stack-form" id="ratio-form">
             @csrf
-            <label>Database
-                <select name="source_database" id="ratio-db">
-                    @foreach($databases as $db)<option value="{{ $db }}">{{ $db }}</option>@endforeach
-                </select>
-                <input type="hidden" name="source_database" id="ratio-db-hidden" disabled>
+            <label>ItemCode
+                <input type="text" name="item_code" id="ratio-item-code" required maxlength="100" placeholder="Contoh: CHPTB8703">
             </label>
-            <label id="ratio-barcode-field">Barcode ERP
-                <div class="input-action">
-                    <input id="ratio-barcode" autocomplete="off" placeholder="Scan / masukkan barcode">
-                    <button class="btn" type="button" id="ratio-lookup">Cari</button>
-                </div>
+            <label>UOM
+                <input type="text" name="uom_code" id="ratio-uom-code" required maxlength="50" placeholder="Contoh: PCS / KTK / KRTN">
             </label>
-            <div id="ratio-found" class="lookup-result muted">Cari barcode untuk mengisi data item otomatis.</div>
-            <input type="hidden" name="item_id" id="ratio-item-id">
-            <input type="hidden" name="item_code" id="ratio-item-code">
-            <input type="hidden" name="item_name" id="ratio-item-name">
-            <input type="hidden" name="uom_level" id="ratio-uom-level">
-            <input type="hidden" name="uom_code" id="ratio-uom-code">
             <label>Ratio ke Smallest UOM
                 <input type="number" name="ratio" id="ratio-value" step="0.0001" min="0.0001" required placeholder="Contoh: 20">
             </label>
@@ -247,132 +207,35 @@
 document.addEventListener('DOMContentLoaded', function () {
     const modal = document.getElementById('ratio-modal');
     const title = document.getElementById('ratio-modal-title');
-    const description = document.getElementById('ratio-modal-description');
-    const dbInput = document.getElementById('ratio-db');
-    const dbHidden = document.getElementById('ratio-db-hidden');
-    const barcodeField = document.getElementById('ratio-barcode-field');
-    const barcodeInput = document.getElementById('ratio-barcode');
-    const ratioInput = document.getElementById('ratio-value');
-    const foundBox = document.getElementById('ratio-found');
-    const itemId = document.getElementById('ratio-item-id');
     const itemCode = document.getElementById('ratio-item-code');
-    const itemName = document.getElementById('ratio-item-name');
-    const uomLevel = document.getElementById('ratio-uom-level');
     const uomCode = document.getElementById('ratio-uom-code');
-    let lastTrigger = null;
+    const ratioValue = document.getElementById('ratio-value');
 
-    function clearItem() {
-        itemId.value = '';
-        itemCode.value = '';
-        itemName.value = '';
-        uomLevel.value = '';
-        uomCode.value = '';
-    }
-
-    function showFound(code, name, uom, level) {
-        foundBox.className = 'lookup-result success-lite ratio-selected-item';
-        foundBox.innerHTML = `<span>Item terpilih</span><strong>${code}</strong><small>${name || '-'}</small><em>${uom} · Level ${level}</em>`;
-    }
-
-    function openNew(trigger) {
-        lastTrigger = trigger;
-        title.textContent = 'Tambah Ratio';
-        description.textContent = 'Cari barcode ERP untuk mengisi item dan UOM secara otomatis.';
-        document.getElementById('ratio-form').reset();
-        dbInput.disabled = false;
-        dbHidden.disabled = true;
-        dbHidden.value = '';
-        barcodeField.hidden = false;
-        clearItem();
-        foundBox.className = 'lookup-result muted';
-        foundBox.textContent = 'Cari barcode untuk mengisi data item otomatis.';
+    function openModal(editButton) {
+        const isEdit = !!editButton;
+        title.textContent = isEdit ? 'Edit Ratio' : 'Tambah Ratio';
+        itemCode.value = isEdit ? editButton.dataset.itemCode : '';
+        uomCode.value = isEdit ? editButton.dataset.uomCode : '';
+        ratioValue.value = isEdit ? editButton.dataset.ratio : '';
+        itemCode.readOnly = isEdit;
+        uomCode.readOnly = isEdit;
         modal.hidden = false;
         modal.setAttribute('aria-hidden', 'false');
-        document.body.classList.add('modal-open');
-        setTimeout(() => barcodeInput.focus(), 20);
-    }
-
-    function openEdit(button) {
-        lastTrigger = button;
-        title.textContent = 'Edit Ratio';
-        description.textContent = 'Perbarui nilai ratio untuk item dan UOM yang dipilih.';
-        dbInput.value = button.dataset.db;
-        dbInput.disabled = true;
-        dbHidden.disabled = false;
-        dbHidden.value = button.dataset.db;
-        barcodeField.hidden = true;
-        barcodeInput.value = '';
-        itemId.value = button.dataset.itemId;
-        itemCode.value = button.dataset.itemCode;
-        itemName.value = button.dataset.itemName || '';
-        uomLevel.value = button.dataset.uomLevel;
-        uomCode.value = button.dataset.uomCode;
-        ratioInput.value = button.dataset.ratio;
-        showFound(button.dataset.itemCode, button.dataset.itemName, button.dataset.uomCode, button.dataset.uomLevel);
-        modal.hidden = false;
-        modal.setAttribute('aria-hidden', 'false');
-        document.body.classList.add('modal-open');
-        setTimeout(() => ratioInput.focus(), 20);
+        setTimeout(() => (isEdit ? ratioValue : itemCode).focus(), 0);
     }
 
     function closeModal() {
         modal.hidden = true;
         modal.setAttribute('aria-hidden', 'true');
-        document.body.classList.remove('modal-open');
-        lastTrigger?.focus();
     }
 
-    document.getElementById('ratio-create-open')?.addEventListener('click', event => openNew(event.currentTarget));
-    document.querySelectorAll('[data-ratio-edit]').forEach(button => button.addEventListener('click', () => openEdit(button)));
-    modal.querySelectorAll('[data-ratio-close]').forEach(el => el.addEventListener('click', closeModal));
+    document.getElementById('ratio-create-open')?.addEventListener('click', () => openModal(null));
+    document.querySelectorAll('[data-ratio-edit]').forEach(button => button.addEventListener('click', () => openModal(button)));
+    document.querySelectorAll('[data-ratio-close]').forEach(button => button.addEventListener('click', closeModal));
 
-    document.getElementById('ratio-lookup')?.addEventListener('click', async () => {
-        const db = dbInput.value;
-        const barcode = barcodeInput.value.trim();
-        if (!barcode) {
-            foundBox.className = 'lookup-result danger-lite';
-            foundBox.textContent = 'Isi barcode terlebih dahulu.';
-            return;
-        }
-
-        foundBox.className = 'lookup-result muted';
-        foundBox.textContent = 'Mencari barcode...';
-        try {
-            const response = await fetch(`{{ route('admin.erp.barcode') }}?source_database=${encodeURIComponent(db)}&barcode=${encodeURIComponent(barcode)}`, {
-                headers: {'Accept':'application/json'}
-            });
-            const json = await response.json();
-            if (!response.ok) throw new Error(json.message || 'Gagal mencari barcode');
-
-            const data = json.data;
-            itemId.value = data.item_id;
-            itemCode.value = data.item_code;
-            itemName.value = data.item_name;
-            uomLevel.value = data.uom_level;
-            uomCode.value = data.uom_code;
-            showFound(data.item_code, data.item_name, data.uom_code, data.uom_level);
-            ratioInput.focus();
-        } catch (error) {
-            clearItem();
-            foundBox.className = 'lookup-result danger-lite';
-            foundBox.textContent = error.message;
-        }
-    });
-
-    dbInput.addEventListener('change', () => {
-        if (!modal.hidden && title.textContent === 'Tambah Ratio') {
-            clearItem();
-            foundBox.className = 'lookup-result muted';
-            foundBox.textContent = 'Database berubah. Cari ulang barcode untuk memilih item.';
-        }
-    });
-
-    document.addEventListener('keydown', event => {
-        if (event.key === 'Escape' && !modal.hidden) closeModal();
-    });
-
-    document.querySelectorAll('#ratio-filter-form select').forEach(select => {
-        select.addEventListener('change', () => document.getElementById('ratio-filter-form').requestSubmit());
+    document.getElementById('ratio-form')?.addEventListener('submit', function () {
+        itemCode.value = itemCode.value.trim().toUpperCase();
+        uomCode.value = uomCode.value.trim().toUpperCase();
     });
 });
 </script>

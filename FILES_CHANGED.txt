@@ -1,0 +1,18 @@
+Files to overwrite/add in project opanme:
+
+OVERWRITE
+- app/Models/UomRatio.php
+- app/Services/RatioImportService.php
+- app/Services/ScanService.php
+- app/Http/Controllers/Admin/RatioController.php
+- resources/views/admin/ratios/index.blade.php
+- resources/templates/uom-ratio-import-template.xlsx
+
+ADD
+- database/migrations/2026_09_04_000008_make_uom_ratios_global.php
+- tests/Feature/GlobalUomRatioTest.php
+- tests/static/global_uom_ratio_contract.php
+
+DOCS
+- INSTALL_UPDATE.md
+- FILES_CHANGED.txt

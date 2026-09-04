@@ -55,79 +55,123 @@ class SimpleSpreadsheetReader
 
     private function readXlsx(string $path): array
     {
+        [$archive, $temporaryArchivePath] = $this->openXlsxArchive($path);
+
         try {
-            $archive = new PharData($path);
-        } catch (Throwable $e) {
-            throw new RuntimeException('File XLSX tidak valid atau tidak dapat dibuka.', 0, $e);
-        }
+            $workbook = $this->entry($archive, 'xl/workbook.xml');
+            $relationships = $this->entry($archive, 'xl/_rels/workbook.xml.rels');
 
-        $workbook = $this->entry($archive, 'xl/workbook.xml');
-        $relationships = $this->entry($archive, 'xl/_rels/workbook.xml.rels');
+            if (! preg_match('/<sheet\b[^>]*\br:id="([^"]+)"/i', $workbook, $sheetMatch)) {
+                throw new RuntimeException('Worksheet pertama tidak ditemukan pada file XLSX.');
+            }
 
-        if (! preg_match('/<sheet\b[^>]*\br:id="([^"]+)"/i', $workbook, $sheetMatch)) {
-            throw new RuntimeException('Worksheet pertama tidak ditemukan pada file XLSX.');
-        }
+            $relationshipId = $sheetMatch[1];
+            $sheetTarget = null;
 
-        $relationshipId = $sheetMatch[1];
-        $sheetTarget = null;
-
-        if (preg_match_all('/<Relationship\b([^>]*)\/?\s*>/i', $relationships, $relationshipMatches)) {
-            foreach ($relationshipMatches[1] as $attributesText) {
-                $attributes = $this->attributes($attributesText);
-                if (($attributes['Id'] ?? null) === $relationshipId) {
-                    $sheetTarget = $attributes['Target'] ?? null;
-                    break;
+            if (preg_match_all('/<Relationship\b([^>]*)\/?\s*>/i', $relationships, $relationshipMatches)) {
+                foreach ($relationshipMatches[1] as $attributesText) {
+                    $attributes = $this->attributes($attributesText);
+                    if (($attributes['Id'] ?? null) === $relationshipId) {
+                        $sheetTarget = $attributes['Target'] ?? null;
+                        break;
+                    }
                 }
             }
-        }
 
-        if (! $sheetTarget) {
-            throw new RuntimeException('Relasi worksheet XLSX tidak ditemukan.');
-        }
+            if (! $sheetTarget) {
+                throw new RuntimeException('Relasi worksheet XLSX tidak ditemukan.');
+            }
 
-        $sheetPath = $this->normalizeWorkbookTarget($sheetTarget);
-        $sheetXml = $this->entry($archive, $sheetPath);
-        $sharedStrings = $this->sharedStrings($archive);
+            $sheetPath = $this->normalizeWorkbookTarget($sheetTarget);
+            $sheetXml = $this->entry($archive, $sheetPath);
+            $sharedStrings = $this->sharedStrings($archive);
 
-        if (! preg_match('/<sheetData\b[^>]*>(.*?)<\/sheetData>/si', $sheetXml, $sheetDataMatch)) {
-            return [];
-        }
+            if (! preg_match('/<sheetData\b[^>]*>(.*?)<\/sheetData>/si', $sheetXml, $sheetDataMatch)) {
+                return [];
+            }
 
-        preg_match_all('/<row\b[^>]*>(.*?)<\/row>/si', $sheetDataMatch[1], $rowMatches);
-        $rows = [];
+            preg_match_all('/<row\b[^>]*>(.*?)<\/row>/si', $sheetDataMatch[1], $rowMatches);
+            $rows = [];
 
-        foreach ($rowMatches[1] as $rowXml) {
-            $cells = [];
-            $maxIndex = -1;
+            foreach ($rowMatches[1] as $rowXml) {
+                $cells = [];
+                $maxIndex = -1;
 
-            preg_match_all('/<c\b([^>]*)>(.*?)<\/c>/si', $rowXml, $cellMatches, PREG_SET_ORDER);
-            foreach ($cellMatches as $cellMatch) {
-                $attributes = $this->attributes($cellMatch[1]);
-                $reference = $attributes['r'] ?? '';
-                $index = $this->columnIndex($reference);
-                if ($index < 0) {
+                preg_match_all('/<c\b([^>]*)>(.*?)<\/c>/si', $rowXml, $cellMatches, PREG_SET_ORDER);
+                foreach ($cellMatches as $cellMatch) {
+                    $attributes = $this->attributes($cellMatch[1]);
+                    $reference = $attributes['r'] ?? '';
+                    $index = $this->columnIndex($reference);
+                    if ($index < 0) {
+                        continue;
+                    }
+
+                    $type = $attributes['t'] ?? '';
+                    $value = $this->cellValue($cellMatch[2], $type, $sharedStrings);
+                    $cells[$index] = $value;
+                    $maxIndex = max($maxIndex, $index);
+                }
+
+                if ($maxIndex < 0) {
+                    $rows[] = [];
                     continue;
                 }
 
-                $type = $attributes['t'] ?? '';
-                $value = $this->cellValue($cellMatch[2], $type, $sharedStrings);
-                $cells[$index] = $value;
-                $maxIndex = max($maxIndex, $index);
+                $row = [];
+                for ($i = 0; $i <= $maxIndex; $i++) {
+                    $row[] = $cells[$i] ?? '';
+                }
+                $rows[] = $row;
             }
 
-            if ($maxIndex < 0) {
-                $rows[] = [];
-                continue;
+            return $rows;
+        } finally {
+            if ($temporaryArchivePath !== null) {
+                @unlink($temporaryArchivePath);
+            }
+        }
+    }
+
+    /**
+     * Uploaded files are normally stored by PHP with a temporary filename such
+     * as /tmp/phpABC123 (without .xlsx). PharData determines ZIP/XLSX support
+     * from the filename extension, so give the uploaded bytes a temporary
+     * .xlsx filename before opening them.
+     *
+     * @return array{0: PharData, 1: ?string}
+     */
+    private function openXlsxArchive(string $path): array
+    {
+        $archivePath = $path;
+        $temporaryArchivePath = null;
+        $pathExtension = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+
+        if (! in_array($pathExtension, ['xlsx', 'zip'], true)) {
+            $temporaryBase = tempnam(sys_get_temp_dir(), 'stock-opname-xlsx-');
+            if ($temporaryBase === false) {
+                throw new RuntimeException('File XLSX sementara tidak dapat dibuat.');
             }
 
-            $row = [];
-            for ($i = 0; $i <= $maxIndex; $i++) {
-                $row[] = $cells[$i] ?? '';
+            $temporaryArchivePath = $temporaryBase.'.xlsx';
+            @unlink($temporaryBase);
+
+            if (! @copy($path, $temporaryArchivePath)) {
+                @unlink($temporaryArchivePath);
+                throw new RuntimeException('File XLSX upload tidak dapat disiapkan untuk dibaca.');
             }
-            $rows[] = $row;
+
+            $archivePath = $temporaryArchivePath;
         }
 
-        return $rows;
+        try {
+            return [new PharData($archivePath), $temporaryArchivePath];
+        } catch (Throwable $e) {
+            if ($temporaryArchivePath !== null) {
+                @unlink($temporaryArchivePath);
+            }
+
+            throw new RuntimeException('File XLSX tidak valid atau tidak dapat dibuka.', 0, $e);
+        }
     }
 
     private function cellValue(string $body, string $type, array $sharedStrings): string

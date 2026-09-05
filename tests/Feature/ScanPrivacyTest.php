@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\CheckerAssignment;
 use App\Models\CycleWarehouse;
+use App\Models\ItemBarcode;
 use App\Models\ScanSession;
 use App\Models\StockOpnameCycle;
 use App\Models\UomRatio;
@@ -24,11 +25,12 @@ class ScanPrivacyTest extends TestCase
         $warehouse = CycleWarehouse::factory()->create(['cycle_id' => $cycle->id]);
         CheckerAssignment::create(['cycle_id' => $cycle->id, 'warehouse_id' => $warehouse->id, 'checker_id' => $checker->id, 'assigned_by' => $checker->id]);
         $session = ScanSession::create(['cycle_id' => $cycle->id, 'warehouse_id' => $warehouse->id, 'checker_id' => $checker->id, 'location' => 'RAK A1', 'started_at' => now()]);
-        UomRatio::create(['source_database' => 'AS_INGCO', 'item_id' => 100, 'item_code' => 'ITEM-A', 'item_name' => 'Item A', 'uom_level' => 2, 'uom_code' => 'BOX', 'ratio' => 20]);
+        ItemBarcode::create(['item_code' => 'ITEM-A', 'barcode' => '8990001', 'uom_code' => 'BOX']);
+        UomRatio::create(['item_code' => 'ITEM-A', 'uom_code' => 'BOX', 'ratio' => 20]);
 
         $erp = Mockery::mock(ErpCatalogService::class);
-        $erp->shouldReceive('findBarcode')->once()->andReturn([
-            'alias_code' => '8990001', 'item_id' => 100, 'item_code' => 'ITEM-A', 'item_name' => 'Item A', 'uom_level' => 2, 'uom_code' => 'BOX',
+        $erp->shouldReceive('findItemByCodeAndUom')->once()->with('AS_INGCO', 'ITEM-A', 'BOX')->andReturn([
+            'item_id' => 100, 'item_code' => 'ITEM-A', 'item_name' => 'Item A', 'uom_level' => 2, 'uom_code' => 'BOX',
         ]);
         $this->app->instance(ErpCatalogService::class, $erp);
 

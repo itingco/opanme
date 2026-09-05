@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\CheckerAssignment;
 use App\Models\DiscoveredScanTransaction;
+use App\Models\ItemBarcode;
 use App\Models\ScanSession;
 use App\Models\ScanTransaction;
 use App\Models\StockOpnameCycle;
@@ -31,13 +32,11 @@ class ScanService
 
         $this->assertActiveAssignedSession($checker, $session);
 
-        try {
-            $item = $this->catalog->findBarcode($session->cycle->source_database, $barcode);
-        } catch (UnexpectedValueException $e) {
-            throw ValidationException::withMessages(['barcode' => $e->getMessage()]);
-        }
+        $mapping = ItemBarcode::query()
+            ->where('barcode', $barcode)
+            ->first();
 
-        if (! $item) {
+        if (! $mapping) {
             $discovered = StockOpnameDiscoveredItem::query()
                 ->where('cycle_id', $session->cycle_id)
                 ->where('alias_code', $barcode)
@@ -57,18 +56,34 @@ class ScanService
             ];
         }
 
+        try {
+            $item = $this->catalog->findItemByCodeAndUom(
+                $session->cycle->source_database,
+                $mapping->item_code,
+                $mapping->uom_code
+            );
+        } catch (UnexpectedValueException $e) {
+            throw ValidationException::withMessages(['barcode' => $e->getMessage()]);
+        }
+
+        if (! $item) {
+            throw ValidationException::withMessages([
+                'barcode' => "Master barcode {$barcode} mengarah ke {$mapping->item_code} / {$mapping->uom_code}, tetapi ItemCode/UOM tersebut tidak ditemukan di ERP {$session->cycle->source_database}.",
+            ]);
+        }
+
         $ratio = UomRatio::query()
-            ->where('item_code', strtoupper(trim((string) $item['item_code'])))
-            ->where('uom_code', strtoupper(trim((string) $item['uom_code'])))
+            ->where('item_code', strtoupper(trim((string) $mapping->item_code)))
+            ->where('uom_code', strtoupper(trim((string) $mapping->uom_code)))
             ->first();
 
         if (! $ratio) {
             throw ValidationException::withMessages([
-                'barcode' => "Master ratio belum tersedia untuk {$item['item_code']} / {$item['uom_code']}.",
+                'barcode' => "Master ratio belum tersedia untuk {$mapping->item_code} / {$mapping->uom_code}.",
             ]);
         }
 
-        $transaction = DB::transaction(function () use ($checker, $session, $item, $ratio): ScanTransaction {
+        $transaction = DB::transaction(function () use ($checker, $session, $barcode, $item, $ratio): ScanTransaction {
             $cycle = StockOpnameCycle::query()->sharedLock()->findOrFail($session->cycle_id);
             if ($cycle->status !== StockOpnameCycle::STATUS_OPEN) {
                 throw ValidationException::withMessages(['barcode' => 'Cycle stock opname sudah ditutup.']);
@@ -80,7 +95,7 @@ class ScanService
                 'warehouse_id' => $session->warehouse_id,
                 'checker_id' => $checker->id,
                 'location' => $session->location,
-                'alias_code' => $item['alias_code'],
+                'alias_code' => $barcode,
                 'item_id' => $item['item_id'],
                 'item_code' => $item['item_code'],
                 'item_name' => $item['item_name'],
@@ -110,14 +125,10 @@ class ScanService
 
         $this->assertActiveAssignedSession($checker, $session);
 
-        try {
-            $erpItem = $this->catalog->findBarcode($session->cycle->source_database, $barcode);
-        } catch (UnexpectedValueException $e) {
-            throw ValidationException::withMessages(['barcode' => $e->getMessage()]);
-        }
-        if ($erpItem) {
+        $mapping = ItemBarcode::query()->where('barcode', $barcode)->first();
+        if ($mapping) {
             throw ValidationException::withMessages([
-                'barcode' => 'Barcode ini sudah ditemukan di ERP. Tutup form Non-System lalu scan ulang secara normal.',
+                'barcode' => "Barcode ini sudah terdaftar di Master Barcode sebagai {$mapping->item_code} / {$mapping->uom_code}. Tutup form Non-System lalu scan ulang secara normal.",
             ]);
         }
 

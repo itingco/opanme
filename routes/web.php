@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\AssignmentController;
+use App\Http\Controllers\Admin\BarcodeController;
 use App\Http\Controllers\Admin\CycleController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\ErpLookupController;
@@ -23,8 +24,17 @@ Route::middleware(['auth','role:ADMIN'])->prefix('admin')->name('admin.')->group
     Route::get('/users', [UserController::class,'index'])->name('users.index');
     Route::post('/users', [UserController::class,'store'])->name('users.store');
     Route::put('/users/{user}', [UserController::class,'update'])->name('users.update');
+
+    Route::get('/barcodes', [BarcodeController::class,'index'])->name('barcodes.index');
+    Route::get('/barcodes/template', [BarcodeController::class,'template'])->name('barcodes.template');
+    Route::get('/barcodes/export', [BarcodeController::class,'export'])->name('barcodes.export');
+    Route::post('/barcodes/import', [BarcodeController::class,'import'])->name('barcodes.import');
+    Route::post('/barcodes', [BarcodeController::class,'store'])->name('barcodes.store');
+    Route::delete('/barcodes/{barcode}', [BarcodeController::class,'destroy'])->name('barcodes.destroy');
+
     Route::get('/ratios', [RatioController::class,'index'])->name('ratios.index');
     Route::get('/ratios/template', [RatioController::class,'template'])->name('ratios.template');
+    Route::get('/ratios/export', [RatioController::class,'export'])->name('ratios.export');
     Route::post('/ratios/import', [RatioController::class,'import'])->name('ratios.import');
     Route::post('/ratios', [RatioController::class,'store'])->name('ratios.store');
     Route::delete('/ratios/{ratio}', [RatioController::class,'destroy'])->name('ratios.destroy');

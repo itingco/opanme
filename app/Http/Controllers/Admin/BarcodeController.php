@@ -3,9 +3,9 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\UomRatio;
-use App\Services\RatioExportService;
-use App\Services\RatioImportService;
+use App\Models\ItemBarcode;
+use App\Services\BarcodeExportService;
+use App\Services\BarcodeImportService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -13,7 +13,7 @@ use RuntimeException;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Throwable;
 
-class RatioController extends Controller
+class BarcodeController extends Controller
 {
     public function index(Request $request): View
     {
@@ -28,8 +28,8 @@ class RatioController extends Controller
 
         $sortColumns = [
             'item_code' => 'item_code',
+            'barcode' => 'barcode',
             'uom_code' => 'uom_code',
-            'ratio' => 'ratio',
             'updated_at' => 'updated_at',
         ];
 
@@ -37,13 +37,13 @@ class RatioController extends Controller
             $sort = 'item_code';
         }
 
-        $ratios = UomRatio::query()
+        $barcodes = ItemBarcode::query()
             ->when($search !== '', function ($query) use ($search) {
                 $operator = $query->getConnection()->getDriverName() === 'pgsql' ? 'ilike' : 'like';
-
                 $query->where(function ($builder) use ($search, $operator) {
                     $builder
                         ->where('item_code', $operator, "%{$search}%")
+                        ->orWhere('barcode', $operator, "%{$search}%")
                         ->orWhere('uom_code', $operator, "%{$search}%");
                 });
             })
@@ -52,8 +52,8 @@ class RatioController extends Controller
             ->paginate($perPage)
             ->withQueryString();
 
-        return view('admin.ratios.index', [
-            'ratios' => $ratios,
+        return view('admin.barcodes.index', [
+            'barcodes' => $barcodes,
             'q' => $search,
             'sort' => $sort,
             'direction' => $direction,
@@ -65,72 +65,66 @@ class RatioController extends Controller
     {
         $data = $request->validate([
             'item_code' => ['required', 'string', 'max:100'],
+            'barcode' => ['required', 'string', 'max:150'],
             'uom_code' => ['required', 'string', 'max:50'],
-            'ratio' => ['required', 'numeric', 'gt:0'],
         ]);
 
-        $itemCode = strtoupper(trim($data['item_code']));
-        $uomCode = strtoupper(trim($data['uom_code']));
-
-        UomRatio::updateOrCreate(
+        ItemBarcode::updateOrCreate(
+            ['barcode' => trim($data['barcode'])],
             [
-                'item_code' => $itemCode,
-                'uom_code' => $uomCode,
-            ],
-            [
-                'ratio' => $data['ratio'],
+                'item_code' => strtoupper(trim($data['item_code'])),
+                'uom_code' => strtoupper(trim($data['uom_code'])),
             ]
         );
 
-        return back()->with('success', 'Master ratio tersimpan.');
+        return back()->with('success', 'Master barcode tersimpan.');
     }
 
-    public function import(Request $request, RatioImportService $importer): RedirectResponse
+    public function import(Request $request, BarcodeImportService $importer): RedirectResponse
     {
         $request->validate([
-            'ratio_file' => ['required', 'file', 'max:10240'],
+            'barcode_file' => ['required', 'file', 'max:10240'],
         ], [
-            'ratio_file.required' => 'Pilih file Excel terlebih dahulu.',
-            'ratio_file.max' => 'Ukuran file import maksimal 10 MB.',
+            'barcode_file.required' => 'Pilih file Excel terlebih dahulu.',
+            'barcode_file.max' => 'Ukuran file import maksimal 10 MB.',
         ]);
 
         try {
-            $result = $importer->import($request->file('ratio_file'));
+            $result = $importer->import($request->file('barcode_file'));
         } catch (RuntimeException $e) {
-            return back()->withErrors(['ratio_file' => $e->getMessage()]);
+            return back()->withErrors(['barcode_file' => $e->getMessage()]);
         } catch (Throwable $e) {
             report($e);
-
-            return back()->withErrors(['ratio_file' => 'Import gagal: '.$e->getMessage()]);
+            return back()->withErrors(['barcode_file' => 'Import gagal: '.$e->getMessage()]);
         }
 
         $success = $result['created'] + $result['updated'];
 
         return back()
-            ->with('success', "Import selesai. {$success} ratio berhasil diproses.")
-            ->with('ratio_import_result', $result);
+            ->with('success', "Import selesai. {$success} barcode berhasil diproses.")
+            ->with('barcode_import_result', $result);
     }
 
     public function template(): BinaryFileResponse
     {
-        $path = resource_path('templates/uom-ratio-import-template.xlsx');
+        $path = resource_path('templates/item-barcode-import-template.xlsx');
         abort_unless(is_file($path), 404, 'Template import tidak ditemukan.');
 
         return response()->download(
             $path,
-            'Template-Import-UOM-Ratio.xlsx',
+            'Template-Import-Master-Barcode.xlsx',
             ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']
         );
     }
 
-    public function export(RatioExportService $exporter): BinaryFileResponse
+    public function export(BarcodeExportService $exporter): BinaryFileResponse
     {
         $directory = storage_path('app/exports');
         if (! is_dir($directory)) {
             mkdir($directory, 0775, true);
         }
 
-        $path = $directory.'/Master-Ratio-'.now()->format('Ymd-His').'.xlsx';
+        $path = $directory.'/Master-Barcode-'.now()->format('Ymd-His').'.xlsx';
         $exporter->export($path);
 
         return response()->download(
@@ -140,10 +134,9 @@ class RatioController extends Controller
         )->deleteFileAfterSend(true);
     }
 
-    public function destroy(UomRatio $ratio): RedirectResponse
+    public function destroy(ItemBarcode $barcode): RedirectResponse
     {
-        $ratio->delete();
-
-        return back()->with('success', 'Master ratio dihapus.');
+        $barcode->delete();
+        return back()->with('success', 'Master barcode dihapus.');
     }
 }

@@ -2,8 +2,8 @@
 
 namespace App\Services;
 
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use UnexpectedValueException;
 
 class ErpCatalogService
@@ -30,6 +30,71 @@ class ErpCatalogService
         ], $rows);
     }
 
+    /**
+     * Resolve a local ItemCode + UOM mapping to the ERP ItemID/UOMLevel for
+     * the database selected by the stock-opname cycle.
+     */
+    public function findItemByCodeAndUom(string $sourceDatabase, string $itemCode, string $uomCode): ?array
+    {
+        $itemCode = strtoupper(trim($itemCode));
+        $uomCode = strtoupper(trim($uomCode));
+        $cacheKey = 'erp_item_uom:'.strtoupper($sourceDatabase).':'.sha1($itemCode.'|'.$uomCode);
+
+        $cached = Cache::get($cacheKey);
+        if (is_array($cached)) {
+            return $cached;
+        }
+
+        $connection = $this->resolver->connectionName($sourceDatabase);
+        $rows = DB::connection($connection)->select(<<<'SQL'
+            SELECT TOP (2)
+                I.ItemID,
+                I.ItemCode,
+                I.ItemName,
+                X.UOMLevel,
+                U.UOMCode
+            FROM IC_Items I WITH (NOLOCK)
+            CROSS APPLY (VALUES
+                (1, I.UOMID1),
+                (2, I.UOMID2),
+                (3, I.UOMID3),
+                (4, I.UOMID4)
+            ) X(UOMLevel, UOMID)
+            INNER JOIN IC_UOM U WITH (NOLOCK)
+                ON U.UOMID = X.UOMID
+            WHERE UPPER(LTRIM(RTRIM(I.ItemCode))) = ?
+              AND UPPER(LTRIM(RTRIM(U.UOMCode))) = ?
+            ORDER BY I.ItemID, X.UOMLevel
+        SQL, [$itemCode, $uomCode]);
+
+        if (count($rows) === 0) {
+            return null;
+        }
+
+        if (count($rows) > 1) {
+            throw new UnexpectedValueException(
+                "ItemCode/UOM {$itemCode} / {$uomCode} ditemukan lebih dari satu kali di ERP. Hubungi Admin."
+            );
+        }
+
+        $row = $rows[0];
+        $item = [
+            'item_id' => (int) $row->ItemID,
+            'item_code' => (string) $row->ItemCode,
+            'item_name' => (string) $row->ItemName,
+            'uom_level' => (int) $row->UOMLevel,
+            'uom_code' => (string) $row->UOMCode,
+        ];
+
+        Cache::put($cacheKey, $item, now()->addHours(8));
+
+        return $item;
+    }
+
+    /**
+     * Legacy ERP barcode helpers are kept for admin/compatibility purposes.
+     * Stock-opname scanning no longer depends on IC_Aliases.
+     */
     public function findBarcodes(string $sourceDatabase, array $barcodes): array
     {
         $barcodes = array_values(array_unique(array_filter(array_map(

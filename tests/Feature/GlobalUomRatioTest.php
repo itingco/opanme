@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\CheckerAssignment;
 use App\Models\CycleWarehouse;
+use App\Models\ItemBarcode;
 use App\Models\ScanSession;
 use App\Models\StockOpnameCycle;
 use App\Models\UomRatio;
@@ -59,6 +60,11 @@ class GlobalUomRatioTest extends TestCase
             'started_at' => now(),
         ]);
 
+        ItemBarcode::create([
+            'item_code' => 'ITEM-A',
+            'barcode' => '8990001',
+            'uom_code' => 'KTK',
+        ]);
         UomRatio::create([
             'item_code' => 'ITEM-A',
             'uom_code' => 'KTK',
@@ -66,11 +72,10 @@ class GlobalUomRatioTest extends TestCase
         ]);
 
         $erp = Mockery::mock(ErpCatalogService::class);
-        $erp->shouldReceive('findBarcode')
+        $erp->shouldReceive('findItemByCodeAndUom')
             ->once()
-            ->with('AS_SMI', '8990001')
+            ->with('AS_SMI', 'ITEM-A', 'KTK')
             ->andReturn([
-                'alias_code' => '8990001',
                 'item_id' => 100,
                 'item_code' => 'ITEM-A',
                 'item_name' => 'Item A',

@@ -1,5 +1,5 @@
 @extends('layouts.app')
-@section('title','Master Ratio')
+@section('title','Master Barcode')
 
 @section('content')
 @php
@@ -7,7 +7,7 @@
         $params = request()->except('page');
         $params['sort'] = $column;
         $params['direction'] = $sort === $column && $direction === 'asc' ? 'desc' : 'asc';
-        return route('admin.ratios.index', $params);
+        return route('admin.barcodes.index', $params);
     };
     $sortMark = fn (string $column) => $sort === $column ? ($direction === 'asc' ? '↑' : '↓') : '↕';
     $hasFilters = $q !== '';
@@ -16,22 +16,22 @@
 <div class="page-heading master-page-heading">
     <div>
         <div class="heading-eyebrow">Master Data</div>
-        <h1>Master UOM Ratio</h1>
-        <p>Berlaku untuk AS_INGCO dan AS_SMI. Satu ratio disimpan berdasarkan ItemCode + UOM.</p>
+        <h1>Master Barcode</h1>
+        <p>Barcode disimpan lokal. Satu barcode hanya boleh menunjuk ke satu ItemCode + satu UOM.</p>
     </div>
     <div class="heading-actions">
-        <a class="btn" href="{{ route('admin.ratios.template') }}">Download Template</a>
-        <a class="btn" href="{{ route('admin.ratios.export') }}">Export Excel</a>
-        <button class="btn primary" type="button" id="ratio-create-open"><span class="btn-icon">+</span> Tambah Ratio</button>
+        <a class="btn" href="{{ route('admin.barcodes.template') }}">Download Template</a>
+        <a class="btn" href="{{ route('admin.barcodes.export') }}">Export Excel</a>
+        <button class="btn primary" type="button" id="barcode-create-open"><span class="btn-icon">+</span> Tambah Barcode</button>
     </div>
 </div>
 
-@if(session('ratio_import_result'))
-    @php($importResult = session('ratio_import_result'))
+@if(session('barcode_import_result'))
+    @php($importResult = session('barcode_import_result'))
     <section class="panel import-result-panel">
         <div class="panel-head import-result-head">
             <div>
-                <h2>Hasil Import Ratio</h2>
+                <h2>Hasil Import Barcode</h2>
                 <p>{{ number_format($importResult['total_rows']) }} baris data diperiksa.</p>
             </div>
             <div class="import-metrics">
@@ -47,13 +47,12 @@
                 <summary>Lihat detail baris gagal</summary>
                 <div class="table-wrap compact-table">
                     <table>
-                        <thead><tr><th>Row</th><th>ItemCode</th><th>UOM</th><th>Keterangan</th></tr></thead>
+                        <thead><tr><th>Row</th><th>Barcode</th><th>Keterangan</th></tr></thead>
                         <tbody>
                             @foreach($importResult['errors'] as $error)
                                 <tr>
                                     <td>{{ $error['row'] }}</td>
-                                    <td>{{ $error['item_code'] ?: '-' }}</td>
-                                    <td>{{ $error['uom_code'] ?: '-' }}</td>
+                                    <td>{{ $error['barcode'] ?: '-' }}</td>
                                     <td>{{ $error['message'] }}</td>
                                 </tr>
                             @endforeach
@@ -69,13 +68,13 @@
     <div class="ratio-import-copy">
         <div class="import-icon">XLSX</div>
         <div>
-            <h2>Import Ratio dari Excel</h2>
-            <p>Upload format <strong>ItemCode + UOM + Ratio</strong>. Tidak perlu database dan tidak perlu barcode.</p>
+            <h2>Import Barcode dari Excel</h2>
+            <p>Upload format <strong>ItemCode + Barcode + UOM</strong>. Barcode tidak lagi diambil dari IC_Aliases saat scan.</p>
         </div>
     </div>
-    <form method="POST" action="{{ route('admin.ratios.import') }}" enctype="multipart/form-data" class="ratio-import-form ratio-import-inline">
+    <form method="POST" action="{{ route('admin.barcodes.import') }}" enctype="multipart/form-data" class="ratio-import-form ratio-import-inline">
         @csrf
-        <input type="file" name="ratio_file" accept=".xlsx,.csv" required>
+        <input type="file" name="barcode_file" accept=".xlsx,.csv" required>
         <button class="btn" type="submit">Import Excel</button>
     </form>
 </section>
@@ -83,21 +82,21 @@
 <section class="panel master-table-panel">
     <div class="master-table-head">
         <div>
-            <h2>Data Ratio</h2>
-            <p>{{ number_format($ratios->total()) }} ratio ditemukan</p>
+            <h2>Data Barcode</h2>
+            <p>{{ number_format($barcodes->total()) }} barcode ditemukan</p>
         </div>
         @if($hasFilters)<span class="filter-active-badge">Filter aktif</span>@endif
     </div>
 
-    <form method="GET" action="{{ route('admin.ratios.index') }}" class="table-filter-bar ratio-filter-bar" id="ratio-filter-form">
+    <form method="GET" action="{{ route('admin.barcodes.index') }}" class="table-filter-bar ratio-filter-bar">
         <input type="hidden" name="sort" value="{{ $sort }}">
         <input type="hidden" name="direction" value="{{ $direction }}">
 
         <label class="filter-search filter-field-wide">
-            <span class="filter-label">Cari Item / UOM</span>
+            <span class="filter-label">Cari Barcode / Item / UOM</span>
             <div class="filter-input-with-icon">
                 <span aria-hidden="true">⌕</span>
-                <input type="search" name="q" value="{{ $q }}" placeholder="Contoh: CHPTB8703 atau KTK" autocomplete="off">
+                <input type="search" name="q" value="{{ $q }}" placeholder="Contoh: 899..., CHPTB8703 atau KTK" autocomplete="off">
             </div>
         </label>
 
@@ -112,7 +111,7 @@
 
         <div class="filter-actions">
             <button class="btn primary" type="submit">Terapkan</button>
-            <a class="btn filter-reset-btn {{ $hasFilters ? '' : 'muted-button' }}" href="{{ route('admin.ratios.index') }}">Reset</a>
+            <a class="btn filter-reset-btn {{ $hasFilters ? '' : 'muted-button' }}" href="{{ route('admin.barcodes.index') }}">Reset</a>
         </div>
     </form>
 
@@ -122,34 +121,34 @@
                 <tr>
                     <th class="row-number-col">No</th>
                     <th><a class="sortable-th" href="{{ $sortUrl('item_code') }}">ItemCode <span>{{ $sortMark('item_code') }}</span></a></th>
+                    <th><a class="sortable-th" href="{{ $sortUrl('barcode') }}">Barcode <span>{{ $sortMark('barcode') }}</span></a></th>
                     <th><a class="sortable-th" href="{{ $sortUrl('uom_code') }}">UOM <span>{{ $sortMark('uom_code') }}</span></a></th>
-                    <th class="num"><a class="sortable-th align-right" href="{{ $sortUrl('ratio') }}">Ratio <span>{{ $sortMark('ratio') }}</span></a></th>
                     <th><a class="sortable-th" href="{{ $sortUrl('updated_at') }}">Update <span>{{ $sortMark('updated_at') }}</span></a></th>
                     <th class="action-col">Aksi</th>
                 </tr>
             </thead>
             <tbody>
-            @forelse($ratios as $ratio)
+            @forelse($barcodes as $barcode)
                 <tr>
-                    <td data-label="No" class="row-number">{{ number_format(($ratios->firstItem() ?? 1) + $loop->index) }}</td>
-                    <td data-label="ItemCode"><strong>{{ $ratio->item_code }}</strong></td>
-                    <td data-label="UOM"><span class="uom-chip"><strong>{{ $ratio->uom_code }}</strong></span></td>
-                    <td data-label="Ratio" class="num ratio-value">{{ rtrim(rtrim(number_format((float)$ratio->ratio,4,'.',','),'0'),'.') }}</td>
+                    <td data-label="No" class="row-number">{{ number_format(($barcodes->firstItem() ?? 1) + $loop->index) }}</td>
+                    <td data-label="ItemCode"><strong>{{ $barcode->item_code }}</strong></td>
+                    <td data-label="Barcode"><strong>{{ $barcode->barcode }}</strong></td>
+                    <td data-label="UOM"><span class="uom-chip"><strong>{{ $barcode->uom_code }}</strong></span></td>
                     <td data-label="Update" class="updated-cell">
-                        <strong>{{ optional($ratio->updated_at)->format('d M Y') ?: '-' }}</strong>
-                        <small>{{ optional($ratio->updated_at)->format('H:i') }}</small>
+                        <strong>{{ optional($barcode->updated_at)->format('d M Y') ?: '-' }}</strong>
+                        <small>{{ optional($barcode->updated_at)->format('H:i') }}</small>
                     </td>
                     <td data-label="Aksi" class="action-cell">
                         <div class="row-actions">
                             <button
                                 type="button"
                                 class="btn small"
-                                data-ratio-edit
-                                data-item-code="{{ $ratio->item_code }}"
-                                data-uom-code="{{ $ratio->uom_code }}"
-                                data-ratio="{{ $ratio->ratio }}"
+                                data-barcode-edit
+                                data-item-code="{{ $barcode->item_code }}"
+                                data-barcode="{{ $barcode->barcode }}"
+                                data-uom-code="{{ $barcode->uom_code }}"
                             >Edit</button>
-                            <form method="POST" action="{{ route('admin.ratios.destroy',$ratio) }}" onsubmit="return confirm('Hapus ratio {{ $ratio->item_code }} - {{ $ratio->uom_code }}?')">
+                            <form method="POST" action="{{ route('admin.barcodes.destroy',$barcode) }}" onsubmit="return confirm('Hapus barcode {{ $barcode->barcode }}?')">
                                 @csrf @method('DELETE')
                                 <button class="btn small table-danger-btn" type="submit">Hapus</button>
                             </form>
@@ -159,8 +158,8 @@
             @empty
                 <tr>
                     <td colspan="6" class="empty table-empty-state">
-                        <strong>{{ $hasFilters ? 'Ratio tidak ditemukan' : 'Belum ada data ratio' }}</strong>
-                        <span>{{ $hasFilters ? 'Ubah kata kunci atau tekan Reset.' : 'Tambah ratio manual atau import dari Excel.' }}</span>
+                        <strong>{{ $hasFilters ? 'Barcode tidak ditemukan' : 'Belum ada data barcode' }}</strong>
+                        <span>{{ $hasFilters ? 'Ubah kata kunci atau tekan Reset.' : 'Tambah barcode manual atau import dari Excel.' }}</span>
                     </td>
                 </tr>
             @endforelse
@@ -168,35 +167,35 @@
         </table>
     </div>
 
-    @include('admin.partials.table-pagination', ['paginator' => $ratios])
+    @include('admin.partials.table-pagination', ['paginator' => $barcodes])
 </section>
 
-<div class="user-modal" id="ratio-modal" hidden aria-hidden="true">
-    <div class="user-modal-backdrop" data-ratio-close></div>
-    <div class="user-modal-dialog ratio-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="ratio-modal-title">
+<div class="user-modal" id="barcode-modal" hidden aria-hidden="true">
+    <div class="user-modal-backdrop" data-barcode-close></div>
+    <div class="user-modal-dialog ratio-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="barcode-modal-title">
         <div class="user-modal-head">
             <div>
-                <span class="modal-eyebrow">Master Ratio</span>
-                <h2 id="ratio-modal-title">Tambah Ratio</h2>
-                <p>Ratio selalu dihitung ke smallest UOM item tersebut.</p>
+                <span class="modal-eyebrow">Master Barcode</span>
+                <h2 id="barcode-modal-title">Tambah Barcode</h2>
+                <p>Satu barcode hanya boleh menunjuk ke satu ItemCode dan satu UOM.</p>
             </div>
-            <button type="button" class="user-modal-close" data-ratio-close aria-label="Tutup modal">×</button>
+            <button type="button" class="user-modal-close" data-barcode-close aria-label="Tutup modal">×</button>
         </div>
 
-        <form method="POST" action="{{ route('admin.ratios.store') }}" class="stack-form" id="ratio-form">
+        <form method="POST" action="{{ route('admin.barcodes.store') }}" class="stack-form" id="barcode-form">
             @csrf
             <label>ItemCode
-                <input type="text" name="item_code" id="ratio-item-code" required maxlength="100" placeholder="Contoh: CHPTB8703">
+                <input type="text" name="item_code" id="barcode-item-code" required maxlength="100" placeholder="Contoh: CHPTB8703">
             </label>
-            <label>UOM
-                <input type="text" name="uom_code" id="ratio-uom-code" required maxlength="50" placeholder="Contoh: PCS / KTK / KRTN">
+            <label>Barcode
+                <input type="text" name="barcode" id="barcode-value" required maxlength="150" placeholder="Scan / masukkan barcode" autocomplete="off">
             </label>
-            <label>Ratio ke Smallest UOM
-                <input type="number" name="ratio" id="ratio-value" step="0.0001" min="0.0001" required placeholder="Contoh: 20">
+            <label>UOM / Satuan
+                <input type="text" name="uom_code" id="barcode-uom-code" required maxlength="50" placeholder="Contoh: PCS / KTK / KRTN">
             </label>
             <div class="user-modal-actions">
-                <button type="button" class="btn" data-ratio-close>Batal</button>
-                <button class="btn primary" type="submit">Simpan Ratio</button>
+                <button type="button" class="btn" data-barcode-close>Batal</button>
+                <button class="btn primary" type="submit">Simpan Barcode</button>
             </div>
         </form>
     </div>
@@ -206,23 +205,22 @@
 @push('scripts')
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-    const modal = document.getElementById('ratio-modal');
-    const title = document.getElementById('ratio-modal-title');
-    const itemCode = document.getElementById('ratio-item-code');
-    const uomCode = document.getElementById('ratio-uom-code');
-    const ratioValue = document.getElementById('ratio-value');
+    const modal = document.getElementById('barcode-modal');
+    const title = document.getElementById('barcode-modal-title');
+    const itemCode = document.getElementById('barcode-item-code');
+    const barcodeValue = document.getElementById('barcode-value');
+    const uomCode = document.getElementById('barcode-uom-code');
 
     function openModal(editButton) {
         const isEdit = !!editButton;
-        title.textContent = isEdit ? 'Edit Ratio' : 'Tambah Ratio';
+        title.textContent = isEdit ? 'Edit Barcode' : 'Tambah Barcode';
         itemCode.value = isEdit ? editButton.dataset.itemCode : '';
+        barcodeValue.value = isEdit ? editButton.dataset.barcode : '';
         uomCode.value = isEdit ? editButton.dataset.uomCode : '';
-        ratioValue.value = isEdit ? editButton.dataset.ratio : '';
-        itemCode.readOnly = isEdit;
-        uomCode.readOnly = isEdit;
+        barcodeValue.readOnly = isEdit;
         modal.hidden = false;
         modal.setAttribute('aria-hidden', 'false');
-        setTimeout(() => (isEdit ? ratioValue : itemCode).focus(), 0);
+        setTimeout(() => (isEdit ? itemCode : barcodeValue).focus(), 0);
     }
 
     function closeModal() {
@@ -230,12 +228,13 @@ document.addEventListener('DOMContentLoaded', function () {
         modal.setAttribute('aria-hidden', 'true');
     }
 
-    document.getElementById('ratio-create-open')?.addEventListener('click', () => openModal(null));
-    document.querySelectorAll('[data-ratio-edit]').forEach(button => button.addEventListener('click', () => openModal(button)));
-    document.querySelectorAll('[data-ratio-close]').forEach(button => button.addEventListener('click', closeModal));
+    document.getElementById('barcode-create-open')?.addEventListener('click', () => openModal(null));
+    document.querySelectorAll('[data-barcode-edit]').forEach(button => button.addEventListener('click', () => openModal(button)));
+    document.querySelectorAll('[data-barcode-close]').forEach(button => button.addEventListener('click', closeModal));
 
-    document.getElementById('ratio-form')?.addEventListener('submit', function () {
+    document.getElementById('barcode-form')?.addEventListener('submit', function () {
         itemCode.value = itemCode.value.trim().toUpperCase();
+        barcodeValue.value = barcodeValue.value.trim();
         uomCode.value = uomCode.value.trim().toUpperCase();
     });
 });

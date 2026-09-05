@@ -18,6 +18,7 @@
             <nav class="top-actions">
                 @if(auth()->user()->isAdmin())
                     <a href="{{ route('admin.cycles.index') }}">Cycle</a>
+                    <a href="{{ route('admin.barcodes.index') }}">Barcode</a>
                     <a href="{{ route('admin.ratios.index') }}">Ratio</a>
                     <a href="{{ route('admin.users.index') }}">User</a>
                 @endif

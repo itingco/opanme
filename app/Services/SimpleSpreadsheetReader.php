@@ -61,14 +61,14 @@ class SimpleSpreadsheetReader
             $workbook = $this->entry($archive, 'xl/workbook.xml');
             $relationships = $this->entry($archive, 'xl/_rels/workbook.xml.rels');
 
-            if (! preg_match('/<sheet\b[^>]*\br:id="([^"]+)"/i', $workbook, $sheetMatch)) {
+            if (! preg_match('/<(?:[A-Za-z0-9_]+:)?sheet\b[^>]*\br:id="([^"]+)"/i', $workbook, $sheetMatch)) {
                 throw new RuntimeException('Worksheet pertama tidak ditemukan pada file XLSX.');
             }
 
             $relationshipId = $sheetMatch[1];
             $sheetTarget = null;
 
-            if (preg_match_all('/<Relationship\b([^>]*)\/?\s*>/i', $relationships, $relationshipMatches)) {
+            if (preg_match_all('/<(?:[A-Za-z0-9_]+:)?Relationship\b([^>]*)\/?\s*>/i', $relationships, $relationshipMatches)) {
                 foreach ($relationshipMatches[1] as $attributesText) {
                     $attributes = $this->attributes($attributesText);
                     if (($attributes['Id'] ?? null) === $relationshipId) {
@@ -86,18 +86,18 @@ class SimpleSpreadsheetReader
             $sheetXml = $this->entry($archive, $sheetPath);
             $sharedStrings = $this->sharedStrings($archive);
 
-            if (! preg_match('/<sheetData\b[^>]*>(.*?)<\/sheetData>/si', $sheetXml, $sheetDataMatch)) {
+            if (! preg_match('/<(?:[A-Za-z0-9_]+:)?sheetData\b[^>]*>(.*?)<\/(?:[A-Za-z0-9_]+:)?sheetData>/si', $sheetXml, $sheetDataMatch)) {
                 return [];
             }
 
-            preg_match_all('/<row\b[^>]*>(.*?)<\/row>/si', $sheetDataMatch[1], $rowMatches);
+            preg_match_all('/<(?:[A-Za-z0-9_]+:)?row\b[^>]*>(.*?)<\/(?:[A-Za-z0-9_]+:)?row>/si', $sheetDataMatch[1], $rowMatches);
             $rows = [];
 
             foreach ($rowMatches[1] as $rowXml) {
                 $cells = [];
                 $maxIndex = -1;
 
-                preg_match_all('/<c\b([^>]*)>(.*?)<\/c>/si', $rowXml, $cellMatches, PREG_SET_ORDER);
+                preg_match_all('/<(?:[A-Za-z0-9_]+:)?c\b([^>]*)>(.*?)<\/(?:[A-Za-z0-9_]+:)?c>/si', $rowXml, $cellMatches, PREG_SET_ORDER);
                 foreach ($cellMatches as $cellMatch) {
                     $attributes = $this->attributes($cellMatch[1]);
                     $reference = $attributes['r'] ?? '';
@@ -180,7 +180,7 @@ class SimpleSpreadsheetReader
             return $this->textNodes($body);
         }
 
-        if (! preg_match('/<v\b[^>]*>(.*?)<\/v>/si', $body, $valueMatch)) {
+        if (! preg_match('/<(?:[A-Za-z0-9_]+:)?v\b[^>]*>(.*?)<\/(?:[A-Za-z0-9_]+:)?v>/si', $body, $valueMatch)) {
             return '';
         }
 
@@ -200,14 +200,14 @@ class SimpleSpreadsheetReader
             return [];
         }
 
-        preg_match_all('/<si\b[^>]*>(.*?)<\/si>/si', $xml, $matches);
+        preg_match_all('/<(?:[A-Za-z0-9_]+:)?si\b[^>]*>(.*?)<\/(?:[A-Za-z0-9_]+:)?si>/si', $xml, $matches);
 
         return array_map(fn ($item) => $this->textNodes($item), $matches[1]);
     }
 
     private function textNodes(string $xml): string
     {
-        preg_match_all('/<t\b[^>]*>(.*?)<\/t>/si', $xml, $matches);
+        preg_match_all('/<(?:[A-Za-z0-9_]+:)?t\b[^>]*>(.*?)<\/(?:[A-Za-z0-9_]+:)?t>/si', $xml, $matches);
 
         return implode('', array_map(fn ($text) => $this->decodeXml($text), $matches[1]));
     }

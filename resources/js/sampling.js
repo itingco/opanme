@@ -20,9 +20,11 @@ if (root) {
     let cameraControls = null;
 
     function setFeedback(type, title, message) {
-        feedback.className = `sample-feedback ${type}`;
+        feedback.className = `scan-feedback sampling-scan-feedback ${type}`;
         feedback.querySelector('strong').textContent = title;
         feedback.querySelector('span').textContent = message;
+        const icon = feedback.querySelector('.feedback-icon');
+        if (icon) icon.textContent = type === 'success' ? '✓' : type === 'error' ? '!' : '⌁';
     }
 
     function sound(kind='scan') {
@@ -53,6 +55,7 @@ if (root) {
     function resetScan() {
         active = null; resultBox.hidden = true; mismatchForm.hidden = true; qtyInput.value=''; barcodeInput.value='';
         setTimeout(()=>barcodeInput.focus({preventScroll:true}),50);
+        setTimeout(()=>setFeedback('idle','Siap scan','Arahkan kamera atau scan barcode berikutnya.'),900);
     }
 
     async function lookup(raw) {
@@ -98,6 +101,16 @@ if (root) {
             btn.style.display='none'; setFeedback('idle','Kamera aktif','Arahkan barcode ke kamera.');
         } catch(_) {btn.disabled=false;btn.textContent='Coba Kamera Lagi';setFeedback('error','Kamera tidak tersedia','Gunakan scanner USB atau input barcode manual.');}
     });
+    const historyDetails = document.querySelector('.sampling-history-details');
+    const mobileHistory = window.matchMedia('(max-width: 780px)');
+    const syncHistoryDetails = () => {
+        if (!historyDetails) return;
+        if (mobileHistory.matches) historyDetails.removeAttribute('open');
+        else historyDetails.setAttribute('open','');
+    };
+    syncHistoryDetails();
+    mobileHistory.addEventListener?.('change', syncHistoryDetails);
+
     window.addEventListener('beforeunload',()=>cameraControls?.stop());
     setTimeout(()=>barcodeInput?.focus({preventScroll:true}),200);
 }

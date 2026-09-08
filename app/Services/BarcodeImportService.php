@@ -8,6 +8,9 @@ use RuntimeException;
 
 class BarcodeImportService
 {
+    private const LOOKUP_CHUNK_SIZE = 1000;
+    private const UPSERT_CHUNK_SIZE = 500;
+
     public function __construct(private readonly SimpleSpreadsheetReader $reader)
     {
     }
@@ -84,8 +87,6 @@ class BarcodeImportService
                 'item_code' => $itemCode,
                 'barcode' => $barcode,
                 'uom_code' => $uomCode,
-                'created_at' => now(),
-                'updated_at' => now(),
             ];
         }
 
@@ -93,13 +94,20 @@ class BarcodeImportService
             return $result;
         }
 
-        $existingByBarcode = ItemBarcode::query()
-            ->whereIn('barcode', array_keys($payloadByBarcode))
-            ->get(['barcode', 'item_code', 'uom_code'])
-            ->keyBy('barcode');
+        $existingByBarcode = [];
+
+        foreach (array_chunk(array_keys($payloadByBarcode), self::LOOKUP_CHUNK_SIZE) as $barcodeChunk) {
+            $existingRows = ItemBarcode::query()
+                ->whereIn('barcode', $barcodeChunk)
+                ->get(['barcode', 'item_code', 'uom_code']);
+
+            foreach ($existingRows as $existingRow) {
+                $existingByBarcode[(string) $existingRow->barcode] = $existingRow;
+            }
+        }
 
         foreach ($payloadByBarcode as $barcode => $payload) {
-            $existing = $existingByBarcode->get($barcode);
+            $existing = $existingByBarcode[$barcode] ?? null;
             if (! $existing) {
                 $result['created']++;
                 continue;
@@ -118,11 +126,13 @@ class BarcodeImportService
         }
 
         if ($payloadByBarcode !== []) {
-            ItemBarcode::upsert(
-                array_values($payloadByBarcode),
-                ['barcode'],
-                ['item_code', 'uom_code', 'updated_at']
-            );
+            foreach (array_chunk(array_values($payloadByBarcode), self::UPSERT_CHUNK_SIZE) as $upsertChunk) {
+                ItemBarcode::upsert(
+                    $upsertChunk,
+                    ['barcode'],
+                    ['item_code', 'uom_code']
+                );
+            }
         }
 
         return $result;

@@ -8,6 +8,9 @@ use RuntimeException;
 
 class RatioImportService
 {
+    private const LOOKUP_CHUNK_SIZE = 500;
+    private const UPSERT_CHUNK_SIZE = 500;
+
     public function __construct(private readonly SimpleSpreadsheetReader $reader)
     {
     }
@@ -86,8 +89,6 @@ class RatioImportService
                 'item_code' => $itemCode,
                 'uom_code' => $uomCode,
                 'ratio' => $ratio,
-                'created_at' => now(),
-                'updated_at' => now(),
             ];
         }
 
@@ -104,11 +105,13 @@ class RatioImportService
             }
         }
 
-        UomRatio::upsert(
-            array_values($payloadByKey),
-            ['item_code', 'uom_code'],
-            ['ratio', 'updated_at']
-        );
+        foreach (array_chunk(array_values($payloadByKey), self::UPSERT_CHUNK_SIZE) as $upsertChunk) {
+            UomRatio::upsert(
+                $upsertChunk,
+                ['item_code', 'uom_code'],
+                ['ratio']
+            );
+        }
 
         return $result;
     }
@@ -142,7 +145,7 @@ class RatioImportService
         $keys = [];
         $itemCodes = array_values(array_unique(array_column($payloads, 'item_code')));
 
-        foreach (array_chunk($itemCodes, 500) as $chunk) {
+        foreach (array_chunk($itemCodes, self::LOOKUP_CHUNK_SIZE) as $chunk) {
             $existing = UomRatio::query()
                 ->whereIn('item_code', $chunk)
                 ->get(['item_code', 'uom_code']);

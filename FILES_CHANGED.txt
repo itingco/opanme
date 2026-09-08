@@ -1,8 +1,0 @@
-app/Http/Controllers/Admin/RatioController.php
-app/Services/RatioExportService.php
-app/Services/SimpleXlsxWriter.php
-resources/views/admin/ratios/index.blade.php
-routes/web.php
-tests/Feature/RatioExportTest.php
-tests/static/ratio_export_contract.php
-INSTALL_RATIO_EXPORT.md

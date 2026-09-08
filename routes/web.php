@@ -6,10 +6,12 @@ use App\Http\Controllers\Admin\CycleController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\ErpLookupController;
 use App\Http\Controllers\Admin\RatioController;
+use App\Http\Controllers\Admin\SamplingReportController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Checker\CheckerController;
 use App\Http\Controllers\Checker\ScanController;
+use App\Http\Controllers\Gerai\SamplingController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('guest')->group(function () {
@@ -17,13 +19,21 @@ Route::middleware('guest')->group(function () {
     Route::post('/login', [LoginController::class, 'store'])->name('login.store');
 });
 Route::post('/logout', [LoginController::class, 'destroy'])->middleware('auth')->name('logout');
-Route::get('/', fn () => auth()->check() ? redirect(auth()->user()->isAdmin() ? route('admin.dashboard') : route('checker.home')) : redirect()->route('login'));
+Route::get('/', function () {
+    if (! auth()->check()) return redirect()->route('login');
+    if (auth()->user()->isAdmin()) return redirect()->route('admin.dashboard');
+    if (auth()->user()->isGerai()) return redirect()->route('gerai.sampling.home');
+    return redirect()->route('checker.home');
+});
 
 Route::middleware(['auth','role:ADMIN'])->prefix('admin')->name('admin.')->group(function () {
     Route::get('/', DashboardController::class)->name('dashboard');
     Route::get('/users', [UserController::class,'index'])->name('users.index');
     Route::post('/users', [UserController::class,'store'])->name('users.store');
     Route::put('/users/{user}', [UserController::class,'update'])->name('users.update');
+
+    Route::get('/sampling', [SamplingReportController::class,'index'])->name('sampling.index');
+    Route::get('/sampling/export-pdf', [SamplingReportController::class,'exportPdf'])->name('sampling.pdf');
 
     Route::get('/barcodes', [BarcodeController::class,'index'])->name('barcodes.index');
     Route::get('/barcodes/template', [BarcodeController::class,'template'])->name('barcodes.template');
@@ -68,4 +78,15 @@ Route::middleware(['auth','role:CHECKER'])->prefix('checker')->name('checker.')-
     Route::get('/sessions/{session}/scan', [CheckerController::class,'scanPage'])->name('scan');
     Route::post('/sessions/{session}/scan', [ScanController::class,'store'])->name('scan.store');
     Route::post('/sessions/{session}/scan/non-system', [ScanController::class,'storeNonSystem'])->name('scan.non-system');
+});
+
+Route::middleware(['auth','role:GERAI'])->prefix('gerai')->name('gerai.sampling.')->group(function () {
+    Route::get('/', [SamplingController::class,'home'])->name('home');
+    Route::get('/warehouses', [SamplingController::class,'warehouses'])->name('warehouses');
+    Route::post('/cycles', [SamplingController::class,'create'])->name('create');
+    Route::get('/cycles/{sampleCycle}/scan', [SamplingController::class,'scan'])->name('scan');
+    Route::post('/cycles/{sampleCycle}/scan-lookup', [SamplingController::class,'lookup'])->name('lookup');
+    Route::post('/cycles/{sampleCycle}/scan-confirm', [SamplingController::class,'confirm'])->name('confirm');
+    Route::put('/cycles/{sampleCycle}/location', [SamplingController::class,'updateLocation'])->name('location');
+    Route::post('/cycles/{sampleCycle}/close', [SamplingController::class,'close'])->name('close');
 });

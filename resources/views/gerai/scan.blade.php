@@ -49,33 +49,73 @@
             <button class="btn primary" type="submit">Proses</button>
         </form>
 
-        <section class="sample-result sampling-result-card" id="sample-result" hidden>
-            <div class="result-item">
-                <span id="sample-result-code">-</span>
-                <h2 id="sample-result-name">-</h2>
-                <small id="sample-result-barcode">-</small>
-            </div>
+        <div class="sampling-validation-modal"
+             id="sample-result"
+             role="dialog"
+             aria-modal="true"
+             aria-labelledby="sample-validation-title"
+             aria-describedby="sample-validation-help"
+             hidden>
+            <div class="sampling-modal-backdrop" aria-hidden="true"></div>
 
-            <div class="system-stock">
-                <span>STOK SISTEM · SMALLEST ON HAND</span>
-                <strong id="sample-system-qty">0</strong>
-                <small id="sample-uom">smallest UOM</small>
-            </div>
+            <section class="sampling-modal-panel sampling-result-card" tabindex="-1">
+                <header class="sampling-modal-header">
+                    <span class="sampling-modal-kicker">ITEM DITEMUKAN</span>
+                    <h2 id="sample-validation-title">Validasi Stok Fisik</h2>
+                    <p id="sample-validation-help">Validasi wajib diselesaikan sebelum scan barang berikutnya.</p>
+                </header>
 
-            <div class="result-actions">
-                <button type="button" class="sample-match" id="sample-match">✓ Stok Cocok</button>
-                <button type="button" class="sample-mismatch" id="sample-mismatch">✕ Tidak Cocok</button>
-            </div>
+                <div class="result-item sampling-modal-item">
+                    <span id="sample-result-code">-</span>
+                    <h3 id="sample-result-name">-</h3>
+                    <small id="sample-result-barcode">-</small>
+                </div>
 
-            <form id="sample-mismatch-form" class="mismatch-form" hidden>
-                <label>
-                    Qty Fisik Sebenarnya
-                    <input id="sample-physical-qty" name="physical_qty" type="number" min="0" step="0.0001" inputmode="decimal" placeholder="Masukkan qty fisik">
-                </label>
-                <button class="btn primary" type="submit">Simpan Qty Fisik</button>
-                <button class="btn" type="button" id="sample-mismatch-cancel">Batal</button>
-            </form>
-        </section>
+                <div class="system-stock">
+                    <span>STOK SISTEM · SMALLEST ON HAND</span>
+                    <strong id="sample-system-qty">0</strong>
+                    <small id="sample-uom">smallest UOM</small>
+                </div>
+
+                <p class="sampling-validation-question">Apakah jumlah stok fisik di lokasi saat ini sesuai dengan stok sistem?</p>
+
+                <div class="result-actions" id="sample-validation-actions">
+                    <button type="button" class="sample-match" id="sample-match">✓ Stok Cocok</button>
+                    <button type="button" class="sample-mismatch" id="sample-mismatch">✕ Ada Selisih</button>
+                </div>
+
+                <form id="sample-mismatch-form" class="mismatch-form sampling-mismatch-form" hidden>
+                    <div class="mismatch-heading">
+                        <strong>Masukkan stok fisik sebenarnya</strong>
+                        <span>Stok sistem: <b id="sample-mismatch-system-qty">0</b></span>
+                    </div>
+
+                    <label>
+                        Qty Fisik Sebenarnya
+                        <input id="sample-physical-qty"
+                               name="physical_qty"
+                               type="number"
+                               min="0"
+                               step="0.0001"
+                               inputmode="decimal"
+                               autocomplete="off"
+                               required
+                               placeholder="Masukkan qty fisik">
+                    </label>
+
+                    <div class="sample-qty-difference" id="sample-qty-difference" aria-live="polite">Selisih: -</div>
+
+                    <div class="sampling-mismatch-actions">
+                        <button class="btn primary" type="submit" id="sample-mismatch-save">Simpan Hasil</button>
+                        <button class="btn" type="button" id="sample-mismatch-cancel">Kembali</button>
+                    </div>
+                </form>
+
+                <div class="sampling-validation-error" id="sample-validation-error" role="alert" hidden></div>
+
+                <p class="sampling-modal-lock-note">Modal ini tidak dapat ditutup sebelum hasil validasi disimpan.</p>
+            </section>
+        </div>
 
         <details class="change-location sampling-change-location">
             <summary>Ganti Lokasi / Rak</summary>

@@ -11,13 +11,22 @@ if (root) {
     const barcodeInput = document.getElementById('sample-barcode');
     const feedback = document.getElementById('sample-feedback');
     const resultBox = document.getElementById('sample-result');
+    const modalPanel = resultBox?.querySelector('.sampling-modal-panel');
     const matchBtn = document.getElementById('sample-match');
     const mismatchBtn = document.getElementById('sample-mismatch');
+    const decisionActions = document.getElementById('sample-validation-actions');
     const mismatchForm = document.getElementById('sample-mismatch-form');
+    const mismatchSaveBtn = document.getElementById('sample-mismatch-save');
+    const mismatchBackBtn = document.getElementById('sample-mismatch-cancel');
     const qtyInput = document.getElementById('sample-physical-qty');
+    const differenceLabel = document.getElementById('sample-qty-difference');
+    const validationError = document.getElementById('sample-validation-error');
+    const mismatchSystemQty = document.getElementById('sample-mismatch-system-qty');
     let active = null;
     let busy = false;
+    let validationPending = false;
     let cameraControls = null;
+    let scanResumeAt = 0;
 
     function setFeedback(type, title, message) {
         feedback.className = `scan-feedback sampling-scan-feedback ${type}`;
@@ -52,45 +61,152 @@ if (root) {
         return data;
     }
 
+    function setModalError(message='') {
+        if (!validationError) return;
+        validationError.textContent = message;
+        validationError.hidden = !message;
+    }
+
+    function setValidationBusy(state) {
+        [matchBtn, mismatchBtn, mismatchSaveBtn, mismatchBackBtn].forEach(button => {
+            if (button) button.disabled = state;
+        });
+        if (qtyInput) qtyInput.disabled = state;
+    }
+
+    function updateDifference() {
+        if (!differenceLabel) return;
+        const raw = qtyInput?.value ?? '';
+        if (!active || raw === '' || !Number.isFinite(Number(raw))) {
+            differenceLabel.textContent = 'Selisih: -';
+            differenceLabel.className = 'sample-qty-difference';
+            return;
+        }
+
+        const difference = Number(raw) - Number(active.system_qty || 0);
+        const prefix = difference > 0 ? '+' : '';
+        differenceLabel.textContent = `Selisih: ${prefix}${fmt(difference)}`;
+        differenceLabel.className = `sample-qty-difference ${difference === 0 ? 'is-zero' : 'has-difference'}`;
+    }
+
+    function showDecisionActions() {
+        if (decisionActions) decisionActions.hidden = false;
+        if (mismatchForm) mismatchForm.hidden = true;
+        if (qtyInput) qtyInput.value = '';
+        setModalError('');
+        updateDifference();
+        setTimeout(()=>matchBtn?.focus({preventScroll:true}),50);
+    }
+
+    function showMismatchForm() {
+        if (decisionActions) decisionActions.hidden = true;
+        if (mismatchForm) mismatchForm.hidden = false;
+        if (qtyInput) qtyInput.value = '';
+        setModalError('');
+        updateDifference();
+        setTimeout(()=>qtyInput?.focus({preventScroll:true}),50);
+    }
+
+    function openValidation(data) {
+        active = data;
+        validationPending = true;
+        document.getElementById('sample-result-code').textContent=data.item_code;
+        document.getElementById('sample-result-name').textContent=data.item_name;
+        document.getElementById('sample-result-barcode').textContent=`Barcode ${data.barcode} · ${data.location}`;
+        document.getElementById('sample-system-qty').textContent=fmt(data.system_qty);
+        document.getElementById('sample-uom').textContent=`UOM scan: ${data.uom_code}`;
+        if (mismatchSystemQty) mismatchSystemQty.textContent = fmt(data.system_qty);
+        showDecisionActions();
+        resultBox.hidden = false;
+        document.body.classList.add('sampling-validation-open');
+        barcodeInput.disabled = true;
+        sound('scan');
+        setFeedback('success','Item ditemukan','Selesaikan validasi stok fisik pada modal.');
+        setTimeout(()=>matchBtn?.focus({preventScroll:true}) || modalPanel?.focus({preventScroll:true}),80);
+    }
+
     function resetScan() {
-        active = null; resultBox.hidden = true; mismatchForm.hidden = true; qtyInput.value=''; barcodeInput.value='';
+        active = null;
+        validationPending = false;
+        scanResumeAt = Date.now() + 700;
+        resultBox.hidden = true;
+        mismatchForm.hidden = true;
+        if (decisionActions) decisionActions.hidden = false;
+        qtyInput.value = '';
+        barcodeInput.value = '';
+        barcodeInput.disabled = false;
+        document.body.classList.remove('sampling-validation-open');
+        setModalError('');
+        setValidationBusy(false);
+        updateDifference();
         setTimeout(()=>barcodeInput.focus({preventScroll:true}),50);
         setTimeout(()=>setFeedback('idle','Siap scan','Arahkan kamera atau scan barcode berikutnya.'),900);
     }
 
     async function lookup(raw) {
-        const barcode=String(raw||'').trim(); if(!barcode || busy) return; busy=true; setFeedback('idle','Membaca barcode...',barcode);
+        const barcode=String(raw||'').trim();
+        if(!barcode || busy || validationPending || Date.now() < scanResumeAt) return;
+        busy=true;
+        setFeedback('idle','Membaca barcode...',barcode);
         try {
-            const d=await post(lookupUrl,{barcode}); active=d;
-            document.getElementById('sample-result-code').textContent=d.item_code;
-            document.getElementById('sample-result-name').textContent=d.item_name;
-            document.getElementById('sample-result-barcode').textContent=`Barcode ${d.barcode} · ${d.location}`;
-            document.getElementById('sample-system-qty').textContent=Number(d.system_qty).toLocaleString('id-ID',{maximumFractionDigits:4});
-            document.getElementById('sample-uom').textContent=`UOM scan: ${d.uom_code}`;
-            resultBox.hidden=false; mismatchForm.hidden=true; sound('scan'); setFeedback('success','Item ditemukan','Bandingkan stok sistem dengan jumlah fisik di rak.');
-        } catch(e) { active=null; resultBox.hidden=true; sound('error'); setFeedback('error','Scan ditolak',e.message); }
-        finally { busy=false; barcodeInput.value=''; }
+            const d=await post(lookupUrl,{barcode});
+            openValidation(d);
+        } catch(e) {
+            active=null;
+            validationPending=false;
+            resultBox.hidden=true;
+            document.body.classList.remove('sampling-validation-open');
+            barcodeInput.disabled=false;
+            sound('error');
+            setFeedback('error','Scan ditolak',e.message);
+        }
+        finally {
+            busy=false;
+            barcodeInput.value='';
+        }
     }
 
     async function confirm(result, physical_qty=null) {
-        if(!active || busy) return; busy=true;
+        if(!active || busy) return;
+
+        if (result === 'MISMATCH' && (physical_qty === null || physical_qty === '' || !Number.isFinite(Number(physical_qty)) || Number(physical_qty) < 0)) {
+            setModalError('Qty fisik wajib diisi dengan angka 0 atau lebih.');
+            qtyInput?.focus({preventScroll:true});
+            return;
+        }
+
+        busy=true;
+        setValidationBusy(true);
+        setModalError('');
         try {
             const d=await post(confirmUrl,{token:active.token,result,physical_qty});
-            sound(result==='MATCH'?'match':'mismatch'); setFeedback('success',result==='MATCH'?'Stok Cocok':'Selisih Tersimpan',`${d.item_code} · fisik ${d.physical_qty}`);
+            sound(result==='MATCH'?'match':'mismatch');
+            setFeedback('success',result==='MATCH'?'Stok Cocok':'Selisih Tersimpan',`${d.item_code} · fisik ${d.physical_qty}`);
             document.getElementById('sample-count').textContent=Number(d.count).toLocaleString('id-ID');
             document.getElementById('sample-empty-row')?.remove();
-            const tr=document.createElement('tr'); tr.innerHTML=`<td>${d.scanned_at}</td><td>${escapeHtml(d.location)}</td><td><strong>${escapeHtml(d.item_code)}</strong><br><small>${escapeHtml(d.item_name)}</small></td><td class="num">${fmt(d.system_qty)}</td><td class="num">${fmt(d.physical_qty)}</td><td><span class="sample-status ${d.result.toLowerCase()}">${d.result==='MATCH'?'Cocok':'Tidak Cocok'}</span></td>`;
-            document.getElementById('sample-history-body').prepend(tr); resetScan();
-        } catch(e) { sound('error'); setFeedback('error','Gagal menyimpan',e.message); }
-        finally { busy=false; }
+            const tr=document.createElement('tr');
+            tr.innerHTML=`<td>${d.scanned_at}</td><td>${escapeHtml(d.location)}</td><td><strong>${escapeHtml(d.item_code)}</strong><br><small>${escapeHtml(d.item_name)}</small></td><td class="num">${fmt(d.system_qty)}</td><td class="num">${fmt(d.physical_qty)}</td><td><span class="sample-status ${d.result.toLowerCase()}">${d.result==='MATCH'?'Cocok':'Tidak Cocok'}</span></td>`;
+            document.getElementById('sample-history-body').prepend(tr);
+            resetScan();
+        } catch(e) {
+            sound('error');
+            setModalError(e.message);
+            setFeedback('error','Gagal menyimpan',e.message);
+        }
+        finally {
+            busy=false;
+            setValidationBusy(false);
+        }
     }
 
     function fmt(v){return Number(v).toLocaleString('id-ID',{minimumFractionDigits:0,maximumFractionDigits:4});}
     function escapeHtml(v){const d=document.createElement('div');d.textContent=String(v??'');return d.innerHTML;}
+
     barcodeForm?.addEventListener('submit',e=>{e.preventDefault();lookup(barcodeInput.value)});
     matchBtn?.addEventListener('click',()=>confirm('MATCH'));
-    mismatchBtn?.addEventListener('click',()=>{mismatchForm.hidden=false;qtyInput.focus()});
-    document.getElementById('sample-mismatch-cancel')?.addEventListener('click',()=>{mismatchForm.hidden=true;qtyInput.value='' });
+    mismatchBtn?.addEventListener('click',showMismatchForm);
+    mismatchBackBtn?.addEventListener('click',showDecisionActions);
+    qtyInput?.addEventListener('input',()=>{setModalError('');updateDifference();});
     mismatchForm?.addEventListener('submit',e=>{e.preventDefault();confirm('MISMATCH',qtyInput.value)});
 
     document.getElementById('sample-camera')?.addEventListener('click', async e => {
@@ -101,6 +217,7 @@ if (root) {
             btn.style.display='none'; setFeedback('idle','Kamera aktif','Arahkan barcode ke kamera.');
         } catch(_) {btn.disabled=false;btn.textContent='Coba Kamera Lagi';setFeedback('error','Kamera tidak tersedia','Gunakan scanner USB atau input barcode manual.');}
     });
+
     const historyDetails = document.querySelector('.sampling-history-details');
     const mobileHistory = window.matchMedia('(max-width: 780px)');
     const syncHistoryDetails = () => {

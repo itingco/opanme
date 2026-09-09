@@ -9,6 +9,7 @@ use App\Http\Controllers\Admin\RatioController;
 use App\Http\Controllers\Admin\SamplingReportController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Auth\LoginController;
+use App\Http\Controllers\Auth\PasswordController;
 use App\Http\Controllers\Checker\CheckerController;
 use App\Http\Controllers\Checker\ScanController;
 use App\Http\Controllers\Gerai\SamplingController;
@@ -18,7 +19,14 @@ Route::middleware('guest')->group(function () {
     Route::get('/login', [LoginController::class, 'create'])->name('login');
     Route::post('/login', [LoginController::class, 'store'])->name('login.store');
 });
+
 Route::post('/logout', [LoginController::class, 'destroy'])->middleware('auth')->name('logout');
+
+Route::middleware('auth')->group(function () {
+    Route::get('/account/password', [PasswordController::class, 'edit'])->name('password.edit');
+    Route::put('/account/password', [PasswordController::class, 'update'])->name('password.update');
+});
+
 Route::get('/', function () {
     if (! auth()->check()) return redirect()->route('login');
     if (auth()->user()->isAdmin()) return redirect()->route('admin.dashboard');

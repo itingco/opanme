@@ -14,7 +14,14 @@
             $homeRoute = auth()->user()->isAdmin() ? route('admin.dashboard') : (auth()->user()->isGerai() ? route('gerai.sampling.home') : route('checker.home'));
         @endphp
         <header class="topbar">
-            <a href="{{ $homeRoute }}" class="brand"><span class="brand-mark">SO</span><span><strong>Stock Opname</strong><small>{{ auth()->user()->role }}</small></span></a>
+            <a href="{{ $homeRoute }}" class="brand">
+                <span class="brand-mark">SO</span>
+                <span>
+                    <strong>Stock Opname</strong>
+                    <small>{{ auth()->user()->role }}</small>
+                </span>
+            </a>
+
             <nav class="top-actions">
                 @if(auth()->user()->isAdmin())
                     <a href="{{ route('admin.cycles.index') }}">Cycle</a>
@@ -25,16 +32,39 @@
                 @elseif(auth()->user()->isGerai())
                     <a href="{{ route('gerai.sampling.home') }}">Sampling Gerai</a>
                 @endif
-                <form method="POST" action="{{ route('logout') }}">@csrf<button class="link-button" type="submit">Keluar</button></form>
+
+                <span>
+                    <a href="{{ route('password.edit') }}" title="Ganti Password">Password</a>
+                </span>
+
+                <form method="POST" action="{{ route('logout') }}">
+                    @csrf
+                    <button class="link-button" type="submit">Keluar</button>
+                </form>
             </nav>
         </header>
     @endauth
+
     <main class="page-wrap @yield('page-class')">
-        @if(session('success'))<div class="alert success">{{ session('success') }}</div>@endif
-        @if($errors->any())<div class="alert danger"><strong>Ada yang perlu diperiksa.</strong><ul>@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
+        @if(session('success'))
+            <div class="alert success">{{ session('success') }}</div>
+        @endif
+
+        @if($errors->any())
+            <div class="alert danger">
+                <strong>Ada yang perlu diperiksa.</strong>
+                <ul>
+                    @foreach($errors->all() as $error)
+                        <li>{{ $error }}</li>
+                    @endforeach
+                </ul>
+            </div>
+        @endif
+
         @yield('content')
     </main>
 </div>
+
 @stack('scripts')
 </body>
 </html>

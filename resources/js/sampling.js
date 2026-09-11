@@ -22,6 +22,8 @@ if (root) {
     const differenceLabel = document.getElementById('sample-qty-difference');
     const validationError = document.getElementById('sample-validation-error');
     const mismatchSystemQty = document.getElementById('sample-mismatch-system-qty');
+    const transitStockBox = document.getElementById('sample-transit-stock');
+    const transitStockList = document.getElementById('sample-transit-stock-list');
     let active = null;
     let busy = false;
     let validationPending = false;
@@ -107,6 +109,29 @@ if (root) {
         setTimeout(()=>qtyInput?.focus({preventScroll:true}),50);
     }
 
+    function renderTransitStock(rows) {
+        if (!transitStockBox || !transitStockList) return;
+
+        const positiveRows = Array.isArray(rows)
+            ? rows.filter(row => Number(row?.smallest_on_hand || 0) > 0)
+            : [];
+
+        transitStockList.innerHTML = '';
+        if (!positiveRows.length) {
+            transitStockBox.hidden = true;
+            return;
+        }
+
+        positiveRows.forEach((row) => {
+            const line = document.createElement('div');
+            const code = row.warehouse_code || `ID ${row.warehouse_id}`;
+            const name = row.warehouse_name || 'In Transit';
+            line.textContent = `${code} · ${name}: ${fmt(row.smallest_on_hand)}`;
+            transitStockList.appendChild(line);
+        });
+        transitStockBox.hidden = false;
+    }
+
     function openValidation(data) {
         active = data;
         validationPending = true;
@@ -116,6 +141,7 @@ if (root) {
         document.getElementById('sample-system-qty').textContent=fmt(data.system_qty);
         document.getElementById('sample-uom').textContent=`UOM scan: ${data.uom_code}`;
         if (mismatchSystemQty) mismatchSystemQty.textContent = fmt(data.system_qty);
+        renderTransitStock(data.transit_stock);
         showDecisionActions();
         resultBox.hidden = false;
         document.body.classList.add('sampling-validation-open');
@@ -138,6 +164,7 @@ if (root) {
         document.body.classList.remove('sampling-validation-open');
         setModalError('');
         setValidationBusy(false);
+        renderTransitStock([]);
         updateDifference();
         setTimeout(()=>barcodeInput.focus({preventScroll:true}),50);
         setTimeout(()=>setFeedback('idle','Siap scan','Arahkan kamera atau scan barcode berikutnya.'),900);
@@ -157,6 +184,7 @@ if (root) {
             resultBox.hidden=true;
             document.body.classList.remove('sampling-validation-open');
             barcodeInput.disabled=false;
+            renderTransitStock([]);
             sound('error');
             setFeedback('error','Scan ditolak',e.message);
         }

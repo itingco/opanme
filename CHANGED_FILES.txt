@@ -1,0 +1,8 @@
+app/Http/Controllers/Admin/SamplingReportController.php
+app/Services/ErpStockService.php
+app/Services/SampleCheckingService.php
+app/Services/SampleReportService.php
+app/Services/SampleReportPdfService.php
+resources/views/admin/sampling/index.blade.php
+resources/views/gerai/scan.blade.php
+resources/js/sampling.js

@@ -24,7 +24,7 @@ class SamplingReportController extends Controller
         $coverage = null;
         $coverageError = null;
         try {
-            $coverage = $report->coverage($filters);
+            $coverage = $this->decorateCoverage($report->coverage($filters), $warehouses);
         } catch (Throwable $e) {
             report($e);
             $coverageError = 'Coverage tidak dapat dihitung karena stok ERP gagal dibaca: '.$e->getMessage();
@@ -42,11 +42,12 @@ class SamplingReportController extends Controller
         ]);
     }
 
-    public function exportPdf(Request $request, SampleReportService $report, SampleReportPdfService $pdf): Response
+    public function exportPdf(Request $request, SampleReportService $report, SampleReportPdfService $pdf, ErpCatalogService $erp): Response
     {
         $filters = $report->filters($request);
         try {
-            $coverage = $report->coverage($filters);
+            $warehouses = $filters['source_database'] !== '' ? $erp->warehouses($filters['source_database']) : [];
+            $coverage = $this->decorateCoverage($report->coverage($filters), $warehouses);
         } catch (Throwable $e) {
             report($e);
             $coverage = null;
@@ -60,5 +61,24 @@ class SamplingReportController extends Controller
             'Content-Length' => (string) strlen($contents),
             'Cache-Control' => 'private, no-store, max-age=0',
         ]);
+    }
+
+    private function decorateCoverage(?array $coverage, array $warehouses): ?array
+    {
+        if (! $coverage || empty($coverage['warehouses'])) {
+            return $coverage;
+        }
+
+        $catalog = collect($warehouses)->keyBy(fn (array $warehouse) => (int) $warehouse['warehouse_id']);
+        foreach ($coverage['warehouses'] as &$item) {
+            $warehouse = $catalog->get((int) $item['erp_warehouse_id']);
+            if ($warehouse) {
+                $item['warehouse_code'] = (string) $warehouse['warehouse_code'];
+                $item['warehouse_name'] = (string) $warehouse['warehouse_name'];
+            }
+        }
+        unset($item);
+
+        return $coverage;
     }
 }

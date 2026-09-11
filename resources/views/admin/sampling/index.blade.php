@@ -7,12 +7,13 @@
         <div>
             <span class="sampling-filter-eyebrow">Filter Laporan</span>
             <h2>Temukan data sampling lebih cepat</h2>
-            <p>Pilih periode, gudang, user, hasil, atau cari item tertentu.</p>
+            <p>Pilih periode, satu atau beberapa gudang, user, hasil, atau cari item tertentu.</p>
         </div>
         @php
+            $selectedWarehouseIds = $filters['erp_warehouse_ids'] ?? [];
             $activeFilterCount = collect([
                 $filters['source_database'] ?? null,
-                $filters['erp_warehouse_id'] ?? null,
+                $selectedWarehouseIds !== [] ? $selectedWarehouseIds : null,
                 $filters['user_id'] ?? null,
                 $filters['result'] ?? null,
                 $filters['location'] ?? null,
@@ -51,28 +52,15 @@
                 </select>
             </label>
 
-            <div class="sampling-filter-field sampling-searchable-field" data-searchable-select="warehouse">
-                <span>Gudang</span>
-                <select name="erp_warehouse_id" id="report-warehouse" class="sampling-native-select" tabindex="-1" aria-hidden="true">
-                    <option value="">Semua Gudang</option>
+            <label class="sampling-filter-field">
+                <span>Gudang (bisa pilih multiple)</span>
+                <select name="erp_warehouse_ids[]" id="report-warehouse" multiple size="6">
                     @foreach($warehouses as $w)
-                        <option value="{{ $w['warehouse_id'] }}" @selected($filters['erp_warehouse_id']==$w['warehouse_id'])>{{ $w['warehouse_code'] }} · {{ $w['warehouse_name'] }}</option>
+                        <option value="{{ $w['warehouse_id'] }}" @selected(in_array((int)$w['warehouse_id'], $selectedWarehouseIds, true))>{{ $w['warehouse_code'] }} · {{ $w['warehouse_name'] }}</option>
                     @endforeach
                 </select>
-                <div class="sampling-combobox">
-                    <button type="button" class="sampling-combobox-trigger" aria-expanded="false">
-                        <span class="sampling-combobox-value">Semua Gudang</span>
-                        <span class="sampling-combobox-chevron">⌄</span>
-                    </button>
-                    <div class="sampling-combobox-menu" hidden>
-                        <div class="sampling-combobox-search-wrap">
-                            <span>⌕</span>
-                            <input type="search" class="sampling-combobox-search" placeholder="Cari kode / nama gudang..." autocomplete="off">
-                        </div>
-                        <div class="sampling-combobox-options"></div>
-                    </div>
-                </div>
-            </div>
+                <small>Pilih lebih dari satu gudang dengan Ctrl + klik (Windows) / Cmd + klik (Mac).</small>
+            </label>
 
             <div class="sampling-filter-field sampling-searchable-field" data-searchable-select="user">
                 <span>User Gerai</span>
@@ -129,7 +117,18 @@
 @if(!empty($coverageError))<div class="alert danger">{{ $coverageError }}</div>@endif
 <div class="summary-grid">
 <section class="panel"><small>Total Sampling</small><h2>{{ number_format($stats['total']) }}</h2></section><section class="panel"><small>Item Unik</small><h2>{{ number_format($stats['unique_items']) }}</h2></section><section class="panel"><small>Cocok</small><h2>{{ number_format($stats['match']) }}</h2></section><section class="panel"><small>Tidak Cocok</small><h2>{{ number_format($stats['mismatch']) }}</h2></section><section class="panel"><small>User Aktif</small><h2>{{ number_format($stats['users']) }}</h2></section>
-@if($coverage)<section class="panel"><small>Coverage</small><h2>{{ number_format($coverage['percentage'],2) }}%</h2><p>{{ number_format($coverage['completed']) }} / {{ number_format($coverage['target']) }} item. Target = item stok &gt; 0 per tanggal akhir filter.</p></section>@endif
+@if($coverage && !empty($coverage['warehouses']))
+    @if(count($coverage['warehouses']) > 1)
+        <section class="panel"><small>Coverage Gabungan</small><h2>{{ number_format($coverage['aggregate']['percentage'],2) }}%</h2><p>{{ number_format($coverage['aggregate']['completed']) }} / {{ number_format($coverage['aggregate']['target']) }} target gudang-item.</p></section>
+    @endif
+    @foreach($coverage['warehouses'] as $warehouseCoverage)
+        <section class="panel">
+            <small>Coverage {{ $warehouseCoverage['warehouse_code'] }}</small>
+            <h2>{{ number_format($warehouseCoverage['percentage'],2) }}%</h2>
+            <p>{{ $warehouseCoverage['warehouse_name'] }}<br>{{ number_format($warehouseCoverage['completed']) }} / {{ number_format($warehouseCoverage['target']) }} item. Target = item stok &gt; 0 per tanggal akhir filter.</p>
+        </section>
+    @endforeach
+@endif
 </div>
 <section class="panel"><div class="table-wrap"><table><thead><tr><th>Waktu</th><th>Gudang</th><th>User</th><th>Lokasi</th><th>Item</th><th>Barcode</th><th class="num">Sistem</th><th class="num">Fisik</th><th class="num">Selisih</th><th>Hasil</th></tr></thead><tbody>
 @forelse($rows as $r)<tr><td>{{ $r->scanned_at?->format('d/m/Y H:i:s') }}</td><td>{{ $r->warehouse_code }}</td><td>{{ $r->user?->name ?? $r->user_id }}</td><td>{{ $r->location }}</td><td><strong>{{ $r->item_code }}</strong><br><small>{{ $r->item_name }}</small></td><td>{{ $r->barcode }}</td><td class="num">{{ number_format((float)$r->system_qty,4,'.',',') }}</td><td class="num">{{ number_format((float)$r->physical_qty,4,'.',',') }}</td><td class="num">{{ number_format((float)$r->physical_qty-(float)$r->system_qty,4,'.',',') }}</td><td>{{ $r->result==='MATCH'?'Cocok':'Tidak Cocok' }}</td></tr>@empty<tr><td colspan="10" class="empty">Tidak ada hasil sampling pada filter ini.</td></tr>@endforelse
@@ -226,17 +225,11 @@ document.addEventListener('DOMContentLoaded', () => {
         return { render, syncLabel, close };
     }
 
-    const warehouseCombo = initSearchableSelect(document.querySelector('[data-searchable-select="warehouse"]'));
     initSearchableSelect(document.querySelector('[data-searchable-select="user"]'));
 
     source?.addEventListener('change', async () => {
-        warehouse.innerHTML = '<option value="">Semua Gudang</option>';
-        warehouseCombo?.syncLabel();
-
-        if (!source.value) {
-            warehouseCombo?.render();
-            return;
-        }
+        warehouse.innerHTML = '';
+        if (!source.value) return;
 
         try {
             const response = await fetch(`${warehouseUrl}?source_database=${encodeURIComponent(source.value)}`, {
@@ -249,10 +242,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 option.textContent = `${item.warehouse_code} · ${item.warehouse_name}`;
                 warehouse.appendChild(option);
             });
-        } finally {
-            warehouse.value = '';
-            warehouseCombo?.syncLabel();
-            warehouseCombo?.render();
+        } catch (_) {
+            warehouse.innerHTML = '';
         }
     });
 

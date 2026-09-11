@@ -23,11 +23,24 @@ class SampleReportService
         $source = strtoupper(trim((string) $request->input('source_database', '')));
         if (! in_array($source, ['AS_INGCO', 'AS_SMI'], true)) $source = '';
 
+        $warehouseIds = collect($request->input('erp_warehouse_ids', []))
+            ->when(
+                ! $request->has('erp_warehouse_ids') && $request->integer('erp_warehouse_id'),
+                fn ($ids) => $ids->push($request->integer('erp_warehouse_id'))
+            )
+            ->filter(fn ($id) => is_numeric($id) && (int) $id > 0)
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+
         return [
             'date_from' => $from,
             'date_to' => $to,
             'source_database' => $source,
-            'erp_warehouse_id' => $request->integer('erp_warehouse_id') ?: null,
+            'erp_warehouse_ids' => $warehouseIds,
+            // Backward compatibility for old links/bookmarks that still expect one warehouse id.
+            'erp_warehouse_id' => count($warehouseIds) === 1 ? $warehouseIds[0] : null,
             'user_id' => $request->integer('user_id') ?: null,
             'result' => strtoupper(trim((string) $request->input('result', ''))),
             'location' => trim((string) $request->input('location', '')),
@@ -39,12 +52,13 @@ class SampleReportService
     {
         $start = $filters['date_from'].' 00:00:00';
         $end = $filters['date_to'].' 23:59:59';
+        $warehouseIds = $filters['erp_warehouse_ids'] ?? [];
 
         return SampleCheck::query()
             ->with('user')
             ->whereBetween('scanned_at', [$start, $end])
             ->when($filters['source_database'] !== '', fn ($q) => $q->where('source_database', $filters['source_database']))
-            ->when($filters['erp_warehouse_id'], fn ($q, $id) => $q->where('erp_warehouse_id', $id))
+            ->when($warehouseIds !== [], fn ($q) => $q->whereIn('erp_warehouse_id', $warehouseIds))
             ->when($filters['user_id'], fn ($q, $id) => $q->where('user_id', $id))
             ->when(in_array($filters['result'], ['MATCH','MISMATCH'], true), fn ($q) => $q->where('result', $filters['result']))
             ->when($filters['location'] !== '', fn ($q) => $q->where('location', 'like', '%'.$filters['location'].'%'))
@@ -73,29 +87,68 @@ class SampleReportService
         ];
     }
 
+    /**
+     * Coverage is calculated independently for every selected warehouse.
+     * Each warehouse target is the unique item set with positive Smallest On Hand
+     * on date_to. Result/user/location/search filters intentionally do not affect coverage.
+     */
     public function coverage(array $filters): ?array
     {
-        if ($filters['source_database'] === '' || ! $filters['erp_warehouse_id']) {
+        $warehouseIds = $filters['erp_warehouse_ids'] ?? [];
+        if ($filters['source_database'] === '' || $warehouseIds === []) {
             return null;
         }
 
-        // Target: unique item with positive ERP "Smallest On Hand" on the report end date.
-        $rows = $this->stock->warehouseSnapshot(
-            $filters['source_database'],
-            $filters['date_to'],
-            (int) $filters['erp_warehouse_id']
-        );
-        $targets = array_column(array_filter($rows, static fn (array $r) => (float) $r['smallest_on_hand'] > 0), 'item_code');
+        $items = [];
+        $aggregateTarget = 0;
+        $aggregateCompleted = 0;
 
-        // Coverage intentionally ignores result/user/location/search filters; it measures whether a target item was sampled at least once.
-        $sampled = SampleCheck::query()
-            ->where('source_database', $filters['source_database'])
-            ->where('erp_warehouse_id', $filters['erp_warehouse_id'])
-            ->whereBetween('scanned_at', [$filters['date_from'].' 00:00:00', $filters['date_to'].' 23:59:59'])
-            ->distinct()
-            ->pluck('item_code')
-            ->all();
+        foreach ($warehouseIds as $warehouseId) {
+            $rows = $this->stock->warehouseSnapshot(
+                $filters['source_database'],
+                $filters['date_to'],
+                (int) $warehouseId
+            );
 
-        return $this->calculator->calculate($targets, $sampled);
+            $targets = array_column(
+                array_filter($rows, static fn (array $r) => (float) $r['smallest_on_hand'] > 0),
+                'item_code'
+            );
+
+            $sampled = SampleCheck::query()
+                ->where('source_database', $filters['source_database'])
+                ->where('erp_warehouse_id', (int) $warehouseId)
+                ->whereBetween('scanned_at', [$filters['date_from'].' 00:00:00', $filters['date_to'].' 23:59:59'])
+                ->distinct()
+                ->pluck('item_code')
+                ->all();
+
+            $calculated = $this->calculator->calculate($targets, $sampled);
+            $warehouseInfo = $rows[0] ?? null;
+
+            $entry = array_merge($calculated, [
+                'erp_warehouse_id' => (int) $warehouseId,
+                'warehouse_code' => (string) ($warehouseInfo['warehouse_code'] ?? ('ID '.$warehouseId)),
+                'warehouse_name' => (string) ($warehouseInfo['warehouse_name'] ?? 'Warehouse'),
+            ]);
+
+            $items[] = $entry;
+            $aggregateTarget += $entry['target'];
+            $aggregateCompleted += $entry['completed'];
+        }
+
+        $aggregate = [
+            'target' => $aggregateTarget,
+            'completed' => $aggregateCompleted,
+            'remaining' => max(0, $aggregateTarget - $aggregateCompleted),
+            'percentage' => $aggregateTarget === 0
+                ? 100.0
+                : round(($aggregateCompleted / $aggregateTarget) * 100, 2),
+        ];
+
+        return [
+            'warehouses' => $items,
+            'aggregate' => $aggregate,
+        ];
     }
 }

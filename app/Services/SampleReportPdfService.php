@@ -16,19 +16,50 @@ class SampleReportPdfService
     {
         $list = $rows instanceof Traversable ? iterator_to_array($rows, false) : (is_array($rows) ? $rows : iterator_to_array($rows, false));
         $pages = [];
-        $chunks = array_chunk($list, 28);
+        $coverageLineCount = 0;
+        if ($coverage && ! empty($coverage['warehouses'])) {
+            $coverageLineCount = (count($coverage['warehouses']) > 1 ? 1 : 0)
+                + (int) ceil(count($coverage['warehouses']) / 3);
+        }
+        $rowsPerPage = max(18, 28 - (int) ceil($coverageLineCount * 0.6));
+        $chunks = array_chunk($list, $rowsPerPage);
         if ($chunks === []) $chunks = [[]];
+
+        $selectedWarehouseIds = $filters['erp_warehouse_ids'] ?? [];
+        $warehouseFilterText = $selectedWarehouseIds === [] ? 'Semua' : implode(',', $selectedWarehouseIds);
 
         foreach ($chunks as $pageIndex => $chunk) {
             $c = [];
             $y = 808.0;
             $c[] = $this->text(self::L, $y, 'LAPORAN SAMPLING STOK GERAI', 14, true); $y -= 18;
-            $c[] = $this->text(self::L, $y, 'Periode: '.$filters['date_from'].' s/d '.$filters['date_to'].' | DB: '.($filters['source_database'] ?: 'Semua').' | Warehouse ID: '.($filters['erp_warehouse_id'] ?: 'Semua'), 7, false); $y -= 18;
+            $c[] = $this->text(self::L, $y, 'Periode: '.$filters['date_from'].' s/d '.$filters['date_to'].' | DB: '.($filters['source_database'] ?: 'Semua').' | Warehouse ID: '.$warehouseFilterText, 7, false); $y -= 18;
             $summary = 'Total '.$stats['total'].' | Item unik '.$stats['unique_items'].' | Cocok '.$stats['match'].' | Tidak cocok '.$stats['mismatch'].' | User '.$stats['users'];
             $c[] = $this->text(self::L, $y, $summary, 7, true); $y -= 15;
-            if ($coverage) {
-                $c[] = $this->text(self::L, $y, 'Coverage: '.$coverage['completed'].' / '.$coverage['target'].' item = '.number_format($coverage['percentage'], 2).'% (target item stok > 0 per tanggal akhir filter)', 7, true); $y -= 18;
+
+            if ($coverage && ! empty($coverage['warehouses'])) {
+                $aggregate = $coverage['aggregate'] ?? null;
+                if ($aggregate && count($coverage['warehouses']) > 1) {
+                    $c[] = $this->text(
+                        self::L,
+                        $y,
+                        'Coverage gabungan: '.$aggregate['completed'].' / '.$aggregate['target'].' = '.number_format($aggregate['percentage'], 2).'%',
+                        7,
+                        true
+                    );
+                    $y -= 12;
+                }
+
+                foreach (array_chunk($coverage['warehouses'], 3) as $coverageChunk) {
+                    $parts = array_map(static fn (array $item): string =>
+                        $item['warehouse_code'].' '.$item['completed'].'/'.$item['target'].' ('.number_format($item['percentage'], 2).'%)',
+                        $coverageChunk
+                    );
+                    $c[] = $this->text(self::L, $y, 'Coverage: '.implode(' | ', $parts), 6.5, false);
+                    $y -= 12;
+                }
+                $y -= 4;
             }
+
             $c[] = $this->line(self::L, $y, self::R, $y); $y -= 14;
             $c[] = $this->text(self::L, $y, 'Waktu', 6, true);
             $c[] = $this->text(92, $y, 'User / Lokasi', 6, true);

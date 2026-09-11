@@ -77,6 +77,11 @@
                     <small id="sample-uom">smallest UOM</small>
                 </div>
 
+                <div class="alert" id="sample-transit-stock" hidden>
+                    <strong>Stok tersedia di Gudang In Transit</strong>
+                    <div id="sample-transit-stock-list"></div>
+                </div>
+
                 <p class="sampling-validation-question">Apakah jumlah stok fisik di lokasi saat ini sesuai dengan stok sistem?</p>
 
                 <div class="result-actions" id="sample-validation-actions">

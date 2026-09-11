@@ -62,6 +62,12 @@ class SampleCheckingService
                 (int) $cycle->erp_warehouse_id,
                 (int) $item['item_id']
             );
+
+            $transitRows = $this->stock->findItemInTransitWarehouses(
+                $cycle->source_database,
+                now(),
+                (int) $item['item_id']
+            );
         } catch (Throwable $e) {
             report($e);
             throw ValidationException::withMessages(['barcode' => 'Gagal membaca stok ERP: '.$e->getMessage()]);
@@ -95,6 +101,12 @@ class SampleCheckingService
             'warehouse_code' => $cycle->warehouse_code,
             'warehouse_name' => $cycle->warehouse_name,
             'location' => $cycle->location,
+            'transit_stock' => array_map(static fn (array $row): array => [
+                'warehouse_id' => (int) $row['warehouse_id'],
+                'warehouse_code' => (string) $row['warehouse_code'],
+                'warehouse_name' => (string) $row['warehouse_name'],
+                'smallest_on_hand' => number_format((float) $row['smallest_on_hand'], 4, '.', ''),
+            ], $transitRows),
         ];
     }
 

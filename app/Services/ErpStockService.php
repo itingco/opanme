@@ -38,10 +38,7 @@ class ErpStockService
 
     public function warehouseSnapshot(string $sourceDatabase, CarbonInterface|string $perDate, int $erpWarehouseId): array
     {
-        $date = $perDate instanceof CarbonInterface ? $perDate->format('Y-m-d') : (string) $perDate;
-        $key = 'erp_sampling_stock:'.strtoupper($sourceDatabase).':'.$date;
-
-        $all = Cache::remember($key, now()->addSeconds(90), fn () => $this->snapshot($sourceDatabase, $date));
+        $all = $this->cachedSnapshot($sourceDatabase, $perDate);
 
         return array_values(array_filter(
             $all,
@@ -62,5 +59,47 @@ class ErpStockService
         }
 
         return null;
+    }
+
+    /**
+     * Return positive balances for the item in warehouses whose code/name contains TRANSIT.
+     * This is informational only and does not change the system quantity of the sampled warehouse.
+     *
+     * @return list<array{warehouse_id:int,warehouse_code:string,warehouse_name:string,smallest_on_hand:string}>
+     */
+    public function findItemInTransitWarehouses(
+        string $sourceDatabase,
+        CarbonInterface|string $perDate,
+        int $itemId
+    ): array {
+        $rows = array_filter(
+            $this->cachedSnapshot($sourceDatabase, $perDate),
+            static function (array $row) use ($itemId): bool {
+                if ((int) $row['item_id'] !== $itemId || (float) $row['smallest_on_hand'] <= 0) {
+                    return false;
+                }
+
+                $warehouseIdentity = strtoupper(trim(
+                    (string) ($row['warehouse_code'] ?? '').' '.(string) ($row['warehouse_name'] ?? '')
+                ));
+
+                return str_contains($warehouseIdentity, 'TRANSIT');
+            }
+        );
+
+        return array_values(array_map(static fn (array $row): array => [
+            'warehouse_id' => (int) $row['warehouse_id'],
+            'warehouse_code' => (string) $row['warehouse_code'],
+            'warehouse_name' => (string) $row['warehouse_name'],
+            'smallest_on_hand' => (string) $row['smallest_on_hand'],
+        ], $rows));
+    }
+
+    private function cachedSnapshot(string $sourceDatabase, CarbonInterface|string $perDate): array
+    {
+        $date = $perDate instanceof CarbonInterface ? $perDate->format('Y-m-d') : (string) $perDate;
+        $key = 'erp_sampling_stock:'.strtoupper($sourceDatabase).':'.$date;
+
+        return Cache::remember($key, now()->addSeconds(90), fn () => $this->snapshot($sourceDatabase, $date));
     }
 }

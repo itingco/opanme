@@ -28,6 +28,7 @@
                     <a href="{{ route('admin.sampling.index') }}">Sampling</a>
                     <a href="{{ route('admin.barcodes.index') }}">Barcode</a>
                     <a href="{{ route('admin.ratios.index') }}">Ratio</a>
+                    <a href="{{ route('label.index') }}">Label</a>
                     <a href="{{ route('admin.users.index') }}">User</a>
                 @elseif(auth()->user()->isGerai())
                     <a href="{{ route('gerai.sampling.home') }}">Sampling Gerai</a>

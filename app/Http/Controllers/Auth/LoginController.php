@@ -24,6 +24,8 @@ class LoginController extends Controller
 
         return match ($user->role) {
             User::ROLE_ADMIN => redirect()->route('admin.dashboard'),
+            User::ROLE_ADMIN_GUDANG => redirect()->route('warehouse.admin.index'),
+            User::ROLE_CHECKER_GUDANG => redirect()->route('warehouse.checker.index'),
             User::ROLE_GERAI => redirect()->route('gerai.sampling.home'),
             default => redirect()->route('checker.home'),
         };

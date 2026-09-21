@@ -1,0 +1,25 @@
+MODIFIED FILES
+app/Http/Controllers/Admin/UserController.php
+app/Http/Controllers/Auth/LoginController.php
+app/Models/SampleCycle.php
+app/Models/User.php
+app/Providers/RouteServiceProvider.php
+resources/views/admin/users/index.blade.php
+resources/views/layouts/app.blade.php
+vite.config.js
+
+NEW FILES
+app/Http/Controllers/Admin/WarehouseSamplingController.php
+app/Http/Controllers/Warehouse/CheckerSamplingController.php
+app/Models/SampleCycleItem.php
+app/Services/WarehouseSamplingCatalogService.php
+database/migrations/2026_09_21_000013_add_warehouse_sampling_workflow.php
+resources/css/sidebar.css
+resources/css/warehouse-sampling.css
+resources/views/warehouse_sampling/admin/index.blade.php
+resources/views/warehouse_sampling/admin/show.blade.php
+resources/views/warehouse_sampling/checker/index.blade.php
+resources/views/warehouse_sampling/checker/show.blade.php
+routes/warehouse_sampling.php
+README_UPDATE_SAMPLING_GUDANG.txt
+CHANGED_FILES_SAMPLING_GUDANG.txt

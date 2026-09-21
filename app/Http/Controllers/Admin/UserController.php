@@ -14,6 +14,14 @@ use Illuminate\View\View;
 
 class UserController extends Controller
 {
+    private const ROLES = [
+        User::ROLE_ADMIN,
+        User::ROLE_CHECKER,
+        User::ROLE_GERAI,
+        User::ROLE_ADMIN_GUDANG,
+        User::ROLE_CHECKER_GUDANG,
+    ];
+
     public function index(Request $request): View
     {
         $search = trim((string) $request->input('q', ''));
@@ -23,7 +31,7 @@ class UserController extends Controller
         $direction = strtolower((string) $request->input('direction', 'asc')) === 'desc' ? 'desc' : 'asc';
         $perPage = (int) $request->input('per_page', 25);
 
-        if (! in_array($role, [User::ROLE_ADMIN, User::ROLE_CHECKER, User::ROLE_GERAI], true)) {
+        if (! in_array($role, self::ROLES, true)) {
             $role = '';
         }
         if (! in_array($status, ['active', 'inactive'], true)) {
@@ -64,7 +72,7 @@ class UserController extends Controller
             'name' => ['required','string','max:150'],
             'username' => ['required','string','max:100','alpha_dash',Rule::unique('users','username')],
             'password' => ['required','string','min:6'],
-            'role' => ['required', Rule::in([User::ROLE_ADMIN, User::ROLE_CHECKER, User::ROLE_GERAI])],
+            'role' => ['required', Rule::in(self::ROLES)],
             'source_database' => ['nullable', Rule::in([StockOpnameCycle::DB_INGCO, StockOpnameCycle::DB_SMI])],
             'erp_warehouse_id' => ['nullable','integer'],
         ]);
@@ -80,7 +88,7 @@ class UserController extends Controller
         $data = $request->validate([
             'name' => ['required','string','max:150'],
             'username' => ['required','string','max:100','alpha_dash',Rule::unique('users','username')->ignore($user->id)],
-            'role' => ['required', Rule::in([User::ROLE_ADMIN, User::ROLE_CHECKER, User::ROLE_GERAI])],
+            'role' => ['required', Rule::in(self::ROLES)],
             'source_database' => ['nullable', Rule::in([StockOpnameCycle::DB_INGCO, StockOpnameCycle::DB_SMI])],
             'erp_warehouse_id' => ['nullable','integer'],
             'is_active' => ['nullable','boolean'],
@@ -104,7 +112,7 @@ class UserController extends Controller
             return $empty;
         }
         if ($warehouseId === null) {
-            return $empty; // GERAI tanpa binding = bebas pilih saat membuat sampling cycle.
+            return $empty;
         }
         if (! $sourceDatabase) {
             throw ValidationException::withMessages(['source_database'=>'Database ERP wajib dipilih jika User Gerai dilekatkan ke gudang.']);

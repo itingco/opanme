@@ -79,11 +79,21 @@ Route::get('/', function () {
         return redirect()->route('login');
     }
 
-    if (auth()->user()->isAdmin()) {
+    $user = auth()->user();
+
+    if ($user->isAdmin()) {
         return redirect()->route('admin.dashboard');
     }
 
-    if (auth()->user()->isGerai()) {
+    if ($user->isAdminGudang()) {
+        return redirect()->route('warehouse.admin.index');
+    }
+
+    if ($user->isCheckerGudang()) {
+        return redirect()->route('warehouse.checker.index');
+    }
+
+    if ($user->isGerai()) {
         return redirect()->route('gerai.sampling.home');
     }
 

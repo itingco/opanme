@@ -1,48 +1,48 @@
-OPNAME - FIX IMPORT BARCODE SQL SERVER 2100 PARAMETER
-===================================================
+FIX AUTH ROUTE - OPNAME / OPANME
+Tanggal: 21-09-2026
 
-Masalah:
-SQLSTATE[IMSSP]: Tried to bind parameter number 2101.
-SQL Server maksimal 2100 bound parameters per statement.
+Masalah yang ditemukan:
+- routes/web.php lokal tertimpa route dari project/modul lain.
+- File tersebut memanggil App\Http\Controllers\AuthController, sedangkan project opanme memakai App\Http\Controllers\Auth\LoginController.
+- Route lama juga memanggil AdminUserController dan SupervisorOtpController yang tidak ada pada project opanme.
+- Login view project ini menggunakan route login.store, bukan login.submit.
 
-Fix:
-- Lookup barcode existing: diproses per 1.000 barcode.
-- Upsert ke DB_AppHub: diproses per 500 barcode.
-- Setiap upsert hanya mengirim ItemCode, Barcode, UOM.
-- Maksimum binding upsert = 500 x 3 = 1.500 (aman di bawah 2.100).
-- Tidak ada perubahan database/migration.
-- Tidak ada perubahan format file import.
-- Counter created / updated / skipped / failed tetap dipertahankan.
+File yang diperbaiki:
+1. routes/web.php
+   - dikembalikan ke struktur route asli project opanme.
+   - login memakai Auth\LoginController.
+   - password route dikembalikan.
+   - semua route Admin/Checker/Gerai/Label existing dipertahankan.
+   - root / ditambah redirect untuk ADMIN_GUDANG dan CHECKER_GUDANG.
 
-TARGET LOCAL:
-C:\xampp82\htdocs\opname
+2. routes/warehouse_sampling.php
+   - duplicate route '/' dihapus.
+   - hanya berisi route modul Sampling Gudang.
 
-FILE PRODUKSI YANG DIGANTI:
-app\Services\BarcodeImportService.php
+3. app/Providers/RouteServiceProvider.php
+   - tetap mendaftarkan web.php dan warehouse_sampling.php tanpa duplicate root route.
 
-CARA COPY MANUAL:
-1. Backup file lama:
-   app\Services\BarcodeImportService.php
+Cara pasang:
+- Copy folder routes dan app dari ZIP ini ke root project C:\xampp82\htdocs\opname
+- Replace/overwrite file yang sama.
 
-2. Copy file dari ZIP ke project dengan struktur folder yang sama.
+Setelah copy jalankan:
+composer dump-autoload
+php artisan route:clear
+php artisan config:clear
+php artisan cache:clear
+php artisan view:clear
+php artisan route:list
 
-3. Jalankan:
-   C:\xampp82\php\php.exe artisan optimize:clear
+Jika php artisan route:list tampil daftar route, lanjut:
+npm.cmd run build
+php artisan serve
 
-4. Test upload barcode lagi.
+Hasil pengujian paket ini:
+- PHP syntax check: OK
+- php artisan route:list: OK, 75 routes terdaftar
+- login route: Auth\LoginController@create/store
+- warehouse sampling routes: terdaftar
 
-TEST OPSIONAL:
-C:\xampp82\php\php.exe tests\static\barcode_import_batching_contract.php
-
-Expected:
-barcode import batching contract: PASS (lookup=1000, upsert=500, max_upsert_bindings=1500)
-
-UNTUK SERVER LINUX:
-cd /var/www/opname
-git pull
-composer install --no-dev --prefer-dist --optimize-autoloader
-php artisan optimize:clear
-php artisan config:cache
-php artisan view:cache
-
-Tidak perlu npm build untuk patch ini karena hanya file PHP backend yang berubah.
+Catatan:
+Di environment pemeriksaan Linux, php artisan optimize:clear menampilkan "DOMDocument not found" karena extension DOM pada PHP environment pemeriksaan tidak aktif. Hal ini terpisah dari masalah AuthController. php artisan route:list tetap berhasil.

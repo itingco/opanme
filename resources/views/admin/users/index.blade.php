@@ -4,16 +4,17 @@
 @php
     $q = $search ?? '';
     $hasFilters = $q !== '' || $role !== '' || $status !== '';
+    $roleOptions = ['ADMIN','CHECKER','GERAI','ADMIN_GUDANG','CHECKER_GUDANG'];
 @endphp
 <div class="page-heading master-page-heading">
-    <div><h1>User Management</h1><p>Kelola Admin, Checker, dan User Gerai beserta binding gudangnya.</p></div>
+    <div><h1>User Management</h1><p>Kelola Admin, Checker, User Gerai, Admin Gudang, dan Checker Gudang.</p></div>
     <button class="btn primary" type="button" id="user-create-open">+ Tambah User</button>
 </div>
 <section class="panel master-table-panel">
     <form method="GET" action="{{ route('admin.users.index') }}" class="table-filter-bar" id="user-filter-form">
         <label class="filter-field-wide"><span class="filter-label">Cari</span><input type="search" name="q" value="{{ $q }}" placeholder="Nama, username, gudang..."></label>
         <label class="filter-field"><span class="filter-label">Role</span><select name="role">
-            <option value="">Semua</option><option value="ADMIN" @selected($role==='ADMIN')>ADMIN</option><option value="CHECKER" @selected($role==='CHECKER')>CHECKER</option><option value="GERAI" @selected($role==='GERAI')>GERAI</option>
+            <option value="">Semua</option>@foreach($roleOptions as $roleOption)<option value="{{ $roleOption }}" @selected($role===$roleOption)>{{ $roleOption }}</option>@endforeach
         </select></label>
         <label class="filter-field"><span class="filter-label">Status</span><select name="status"><option value="">Semua</option><option value="active" @selected($status==='active')>Aktif</option><option value="inactive" @selected($status==='inactive')>Nonaktif</option></select></label>
         <label class="filter-field"><span class="filter-label">Baris</span><select name="per_page">@foreach([10,25,50,100] as $size)<option value="{{ $size }}" @selected($perPage===$size)>{{ $size }}</option>@endforeach</select></label>
@@ -33,16 +34,16 @@
 </section>
 
 @php($databases = [\App\Models\StockOpnameCycle::DB_INGCO, \App\Models\StockOpnameCycle::DB_SMI])
-<div class="user-modal" id="user-create-modal" hidden><div class="user-modal-backdrop" data-create-close></div><div class="user-modal-dialog"><div class="user-modal-head"><div><h2>Tambah User</h2><p>Untuk GERAI, gudang boleh dikosongkan agar user bebas memilih.</p></div><button type="button" class="user-modal-close" data-create-close>×</button></div>
+<div class="user-modal" id="user-create-modal" hidden><div class="user-modal-backdrop" data-create-close></div><div class="user-modal-dialog"><div class="user-modal-head"><div><h2>Tambah User</h2><p>ADMIN_GUDANG membuat periode sampling. CHECKER_GUDANG menerima list item dan mengisi qty fisik.</p></div><button type="button" class="user-modal-close" data-create-close>×</button></div>
 <form method="POST" action="{{ route('admin.users.store') }}" class="stack-form gerai-user-form">@csrf
 <label>Nama<input name="name" required></label><label>Username<input name="username" required></label><label>Password<input type="password" name="password" minlength="6" required></label>
-<label>Role<select name="role" data-role-select><option value="CHECKER">CHECKER</option><option value="GERAI">GERAI</option><option value="ADMIN">ADMIN</option></select></label>
-<div data-gerai-binding hidden><label>Database ERP<select name="source_database" data-source-select><option value="">-- Bebas pilih saat sampling --</option>@foreach($databases as $db)<option value="{{ $db }}">{{ $db }}</option>@endforeach</select></label><label>Gudang<select name="erp_warehouse_id" data-warehouse-select><option value="">-- Tidak diikat / bebas --</option></select></label><small>Jika gudang dipilih, User Gerai hanya dapat sampling gudang tersebut.</small></div>
+<label>Role<select name="role" data-role-select>@foreach($roleOptions as $roleOption)<option value="{{ $roleOption }}">{{ $roleOption }}</option>@endforeach</select></label>
+<div data-gerai-binding hidden><label>Database ERP<select name="source_database" data-source-select><option value="">-- Bebas pilih saat sampling --</option>@foreach($databases as $db)<option value="{{ $db }}">{{ $db }}</option>@endforeach</select></label><label>Gudang<select name="erp_warehouse_id" data-warehouse-select><option value="">-- Tidak diikat / bebas --</option></select></label><small>Binding gudang hanya berlaku untuk role GERAI.</small></div>
 <div class="user-modal-actions"><button type="button" class="btn" data-create-close>Batal</button><button class="btn primary">Simpan User</button></div></form></div></div>
 
 <div class="user-modal" id="user-edit-modal" hidden><div class="user-modal-backdrop" data-edit-close></div><div class="user-modal-dialog"><div class="user-modal-head"><div><h2>Edit User</h2></div><button type="button" class="user-modal-close" data-edit-close>×</button></div>
 <form method="POST" id="user-edit-form" class="stack-form gerai-user-form">@csrf @method('PUT')
-<label>Nama<input id="edit-name" name="name" required></label><label>Username<input id="edit-username" name="username" required></label><label>Role<select id="edit-role" name="role" data-role-select><option value="CHECKER">CHECKER</option><option value="GERAI">GERAI</option><option value="ADMIN">ADMIN</option></select></label>
+<label>Nama<input id="edit-name" name="name" required></label><label>Username<input id="edit-username" name="username" required></label><label>Role<select id="edit-role" name="role" data-role-select>@foreach($roleOptions as $roleOption)<option value="{{ $roleOption }}">{{ $roleOption }}</option>@endforeach</select></label>
 <div data-gerai-binding hidden><label>Database ERP<select id="edit-source" name="source_database" data-source-select><option value="">-- Bebas pilih saat sampling --</option>@foreach($databases as $db)<option value="{{ $db }}">{{ $db }}</option>@endforeach</select></label><label>Gudang<select id="edit-warehouse" name="erp_warehouse_id" data-warehouse-select><option value="">-- Tidak diikat / bebas --</option></select></label></div>
 <label>Password Baru<input type="password" name="password" minlength="6" placeholder="Kosong = tidak berubah"></label><label><input id="edit-active" type="checkbox" name="is_active" value="1"> Akun Aktif</label>
 <div class="user-modal-actions"><button type="button" class="btn" data-edit-close>Batal</button><button class="btn primary">Simpan Perubahan</button></div></form></div></div>

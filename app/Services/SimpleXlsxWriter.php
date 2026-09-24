@@ -67,7 +67,20 @@ class SimpleXlsxWriter
         foreach ($cells as $index => $cell) {
             $reference = $this->columnName($index + 1).$rowNumber;
             $style = (int) ($cell['style'] ?? 0);
-            $escaped = $this->xml((string) ($cell['value'] ?? ''));
+            $value = $cell['value'] ?? '';
+
+            // Keep codes such as "00521" as text, but write real PHP numbers as
+            // numeric Excel cells so raw exports can be summed/pivoted immediately.
+            if (is_int($value) || is_float($value)) {
+                $number = is_float($value)
+                    ? rtrim(rtrim(number_format($value, 10, '.', ''), '0'), '.')
+                    : (string) $value;
+                if ($number === '' || $number === '-0') $number = '0';
+                fwrite($handle, '<c r="'.$reference.'" s="'.$style.'"><v>'.$number.'</v></c>');
+                continue;
+            }
+
+            $escaped = $this->xml((string) $value);
             fwrite($handle, '<c r="'.$reference.'" s="'.$style.'" t="inlineStr"><is><t xml:space="preserve">'.$escaped.'</t></is></c>');
         }
         fwrite($handle, '</row>');

@@ -33,6 +33,7 @@ class SampleCycle extends Model
     public function checker(): BelongsTo { return $this->belongsTo(User::class, 'assigned_checker_id'); }
     public function checks(): HasMany { return $this->hasMany(SampleCheck::class, 'sample_cycle_id'); }
     public function items(): HasMany { return $this->hasMany(SampleCycleItem::class, 'sample_cycle_id'); }
+    public function warehouses(): HasMany { return $this->hasMany(SampleCycleWarehouse::class, 'sample_cycle_id'); }
 
     public function isOpen(): bool { return $this->status === self::STATUS_OPEN; }
     public function isDraft(): bool { return $this->status === self::STATUS_DRAFT; }

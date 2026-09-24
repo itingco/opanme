@@ -5,7 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', 'Stock Opname') · {{ config('app.name') }}</title>
-    @vite(['resources/css/app.css','resources/css/sidebar.css','resources/js/app.js'])
+    <link rel="stylesheet" href="{{ asset('assets/css/app.css') }}?v=20260923">
+    <link rel="stylesheet" href="{{ asset('assets/css/sidebar.css') }}?v=20260923">
+    @stack('styles')
 </head>
 <body>
 @auth
@@ -28,6 +30,7 @@
                 <a class="sidebar-link {{ request()->routeIs('admin.dashboard') ? 'active' : '' }}" href="{{ route('admin.dashboard') }}"><span class="sidebar-icon">⌂</span><span class="sidebar-label">Dashboard</span></a>
                 <a class="sidebar-link {{ request()->routeIs('admin.cycles.*') ? 'active' : '' }}" href="{{ route('admin.cycles.index') }}"><span class="sidebar-icon">◫</span><span class="sidebar-label">Cycle Opname</span></a>
                 <a class="sidebar-link {{ request()->routeIs('warehouse.admin.*') ? 'active' : '' }}" href="{{ route('warehouse.admin.index') }}"><span class="sidebar-icon">▦</span><span class="sidebar-label">Sampling Gudang</span></a>
+                <a class="sidebar-link {{ request()->routeIs('warehouse.history.*') ? 'active' : '' }}" href="{{ route('warehouse.history.index') }}"><span class="sidebar-icon">≡</span><span class="sidebar-label">History Sampling</span></a>
                 <a class="sidebar-link {{ request()->routeIs('admin.sampling.*') ? 'active' : '' }}" href="{{ route('admin.sampling.index') }}"><span class="sidebar-icon">◎</span><span class="sidebar-label">Sampling Gerai</span></a>
                 <a class="sidebar-link {{ request()->routeIs('admin.barcodes.*') ? 'active' : '' }}" href="{{ route('admin.barcodes.index') }}"><span class="sidebar-icon">▥</span><span class="sidebar-label">Barcode</span></a>
                 <a class="sidebar-link {{ request()->routeIs('admin.ratios.*') ? 'active' : '' }}" href="{{ route('admin.ratios.index') }}"><span class="sidebar-icon">⇄</span><span class="sidebar-label">Ratio</span></a>
@@ -35,6 +38,7 @@
                 <a class="sidebar-link {{ request()->routeIs('admin.users.*') ? 'active' : '' }}" href="{{ route('admin.users.index') }}"><span class="sidebar-icon">♙</span><span class="sidebar-label">User</span></a>
             @elseif($u->isAdminGudang())
                 <a class="sidebar-link {{ request()->routeIs('warehouse.admin.*') ? 'active' : '' }}" href="{{ route('warehouse.admin.index') }}"><span class="sidebar-icon">▦</span><span class="sidebar-label">Sampling Gudang</span></a>
+                <a class="sidebar-link {{ request()->routeIs('warehouse.history.*') ? 'active' : '' }}" href="{{ route('warehouse.history.index') }}"><span class="sidebar-icon">≡</span><span class="sidebar-label">History Sampling</span></a>
             @elseif($u->isCheckerGudang())
                 <a class="sidebar-link {{ request()->routeIs('warehouse.checker.*') ? 'active' : '' }}" href="{{ route('warehouse.checker.index') }}"><span class="sidebar-icon">✓</span><span class="sidebar-label">Tugas Sampling</span></a>
             @elseif($u->isGerai())
@@ -93,6 +97,8 @@
 @else
 <div class="app-shell"><main class="page-wrap @yield('page-class')">@yield('content')</main></div>
 @endauth
+<script src="{{ asset('assets/vendor/zxing-browser.min.js') }}?v=20260923"></script>
+<script src="{{ asset('assets/js/app.js') }}?v=20260923"></script>
 @stack('scripts')
 </body>
 </html>

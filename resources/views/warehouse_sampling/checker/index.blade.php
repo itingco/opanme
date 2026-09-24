@@ -1,12 +1,51 @@
 @extends('layouts.app')
 @section('title','Tugas Sampling Gudang')
 @section('content')
-@vite('resources/css/warehouse-sampling.css')
-<div class="page-heading"><div><h1>Tugas Sampling Gudang</h1><p>Masukkan qty fisik yang benar-benar ditemukan untuk setiap baris yang ditugaskan.</p></div></div>
+@push('styles')
+<link rel="stylesheet" href="{{ asset('assets/css/warehouse-sampling.css') }}?v=20260923i">
+@endpush
+<div class="page-heading">
+    <div>
+        <h1>Tugas Sampling Gudang</h1>
+        <p>Isi Qty Fisik Total seluruh item sebagai draft, lalu finalisasi sekaligus setelah pengecekan selesai.</p>
+    </div>
+</div>
 <section class="panel">
 @forelse($periods as $period)
-@php $pct=$period->items_count>0?min(100,($period->checked_items_count/$period->items_count)*100):0; $targetCount=$period->items_count>0?(int)ceil($period->items_count*((float)$period->target_percentage/100)):0; $reached=$targetCount>0&&$period->checked_items_count>=$targetCount; @endphp
-<article class="ws-period-card"><div class="ws-period-head"><div><strong>{{ $period->cycle_no }}</strong><small>{{ $period->warehouse_code }} · {{ $period->warehouse_name }} · {{ $period->location }}</small></div><span class="ws-badge {{ strtolower($period->status) }}">{{ $period->status }}</span></div><div class="ws-period-meta"><span><b>{{ $period->items_count }}</b>Total baris</span><span><b>{{ $period->checked_items_count }}</b>Sudah dicek</span><span><b>{{ number_format((float)$period->target_percentage,0) }}%</b>Target</span></div><div class="ws-progress {{ $reached?'target-reached':'' }}"><span style="width:{{ $pct }}%"></span></div><small class="ws-note">{{ number_format($pct,1) }}% selesai · target {{ $targetCount }} baris</small><a class="btn primary" href="{{ route('warehouse.checker.show',$period) }}">{{ $period->isOpen() ? 'Mulai / Lanjut Cek':'Lihat Hasil' }}</a></article>
+@php
+    $filled=(int)($period->filled_items_count ?? 0);
+    $total=(int)$period->items_count;
+    $finalized=$total>0 && (int)$period->checked_items_count===$total;
+    $pct=$total>0?min(100,($filled/$total)*100):0;
+    $targetCount=$total>0?(int)ceil($total*((float)$period->target_percentage/100)):0;
+    $reached=$targetCount>0&&$filled>=$targetCount;
+@endphp
+<article class="ws-period-card">
+    <div class="ws-period-head">
+        <div><strong>{{ $period->cycle_no }}</strong><small>{{ $period->warehouses_count }} gudang digabung · {{ $period->location }}</small></div>
+        @if($finalized)
+            <span class="ws-badge open">FINAL</span>
+        @else
+            <span class="ws-badge {{ strtolower($period->status) }}">{{ $period->status }}</span>
+        @endif
+    </div>
+    <div class="ws-period-meta">
+        <span><b>{{ $total }}</b>Total item</span>
+        <span><b>{{ $filled }}</b>Draft terisi</span>
+        <span><b>{{ $finalized ? '100%' : number_format((float)$period->target_percentage,0).'%' }}</b>{{ $finalized ? 'Final' : 'Target' }}</span>
+    </div>
+    <div class="ws-progress {{ $finalized || $reached?'target-reached':'' }}"><span style="width:{{ $finalized ? 100 : $pct }}%"></span></div>
+    <small class="ws-note">
+        @if($finalized)
+            Seluruh {{ $total }} item sudah difinalisasi dan terkunci.
+        @else
+            {{ number_format($pct,1) }}% draft terisi · target {{ $targetCount }} item
+        @endif
+    </small>
+    <a class="btn {{ $finalized ? '' : 'primary' }}" href="{{ route('warehouse.checker.show',$period) }}">
+        {{ $finalized ? 'Lihat Hasil Final' : ($period->isOpen() ? 'Lanjut Input Qty' : 'Lihat Hasil') }}
+    </a>
+</article>
 @empty<div class="empty">Belum ada tugas sampling gudang yang diberikan kepada Anda.</div>@endforelse
 {{ $periods->links() }}
 </section>

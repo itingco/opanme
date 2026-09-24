@@ -1,8 +1,19 @@
 <?php
 
 use App\Http\Controllers\Admin\WarehouseSamplingController;
+use App\Http\Controllers\Admin\WarehouseSamplingHistoryController;
 use App\Http\Controllers\Warehouse\CheckerSamplingController;
 use Illuminate\Support\Facades\Route;
+
+
+Route::middleware(['auth', 'role:ADMIN,ADMIN_GUDANG'])
+    ->prefix('admin/warehouse-sampling')
+    ->name('warehouse.history.')
+    ->group(function () {
+        Route::get('/history', [WarehouseSamplingHistoryController::class, 'index'])->name('index');
+        Route::get('/history/export-pdf', [WarehouseSamplingHistoryController::class, 'exportPdf'])->name('pdf');
+        Route::get('/history/export-excel', [WarehouseSamplingHistoryController::class, 'exportExcel'])->name('excel');
+    });
 
 Route::middleware(['auth', 'role:ADMIN,ADMIN_GUDANG'])
     ->prefix('admin/warehouse-sampling')
@@ -13,9 +24,10 @@ Route::middleware(['auth', 'role:ADMIN,ADMIN_GUDANG'])
         Route::get('/warehouses', [WarehouseSamplingController::class, 'warehouses'])->name('warehouses');
         Route::get('/periods/{sampleCycle}', [WarehouseSamplingController::class, 'show'])->name('show');
         Route::put('/periods/{sampleCycle}', [WarehouseSamplingController::class, 'update'])->name('update');
-        Route::get('/periods/{sampleCycle}/item-search', [WarehouseSamplingController::class, 'itemSearch'])->name('items.search');
-        Route::post('/periods/{sampleCycle}/items', [WarehouseSamplingController::class, 'addItem'])->name('items.store');
+        Route::get('/periods/{sampleCycle}/available-items', [WarehouseSamplingController::class, 'availableItems'])->name('items.available');
+        Route::post('/periods/{sampleCycle}/items', [WarehouseSamplingController::class, 'addItems'])->name('items.store');
         Route::delete('/periods/{sampleCycle}/items/{sampleCycleItem}', [WarehouseSamplingController::class, 'removeItem'])->name('items.destroy');
+        Route::put('/periods/{sampleCycle}/items/{sampleCycleItem}/validate', [WarehouseSamplingController::class, 'validateItem'])->name('items.validate');
         Route::post('/periods/{sampleCycle}/release', [WarehouseSamplingController::class, 'release'])->name('release');
         Route::post('/periods/{sampleCycle}/close', [WarehouseSamplingController::class, 'close'])->name('close');
     });
@@ -26,5 +38,6 @@ Route::middleware(['auth', 'role:CHECKER_GUDANG'])
     ->group(function () {
         Route::get('/', [CheckerSamplingController::class, 'index'])->name('index');
         Route::get('/periods/{sampleCycle}', [CheckerSamplingController::class, 'show'])->name('show');
+        Route::put('/periods/{sampleCycle}/batch', [CheckerSamplingController::class, 'saveBatch'])->name('batch');
         Route::put('/periods/{sampleCycle}/items/{sampleCycleItem}', [CheckerSamplingController::class, 'check'])->name('check');
     });

@@ -2,7 +2,12 @@
 @section('title','Scan Sampling')
 @section('page-class','sampling-scanner-page')
 @section('content')
-@vite(['resources/css/sampling.css','resources/js/sampling.js'])
+@push('styles')
+<link rel="stylesheet" href="{{ asset('assets/css/sampling.css') }}?v=20260923">
+@endpush
+@push('scripts')
+<script src="{{ asset('assets/js/sampling.js') }}?v=20260923"></script>
+@endpush
 
 <div class="sampling-shell"
      data-sampling-scanner

@@ -1,12 +1,10 @@
+app/Services/WarehouseSamplingSalesInvoiceService.php
+app/Models/SampleCycleItemStock.php
 app/Http/Controllers/Admin/WarehouseSamplingController.php
-app/Http/Controllers/Admin/WarehouseSamplingHistoryController.php
 app/Services/WarehouseSamplingHistoryService.php
+app/Http/Controllers/Admin/WarehouseSamplingHistoryController.php
 app/Services/WarehouseSamplingHistoryPdfService.php
-app/Services/SimpleXlsxWriter.php
+database/migrations/2026_09_25_000017_add_sales_invoice_adjustment_to_sampling_stocks.php
+resources/views/warehouse_sampling/admin/show.blade.php
 resources/views/warehouse_sampling/history/index.blade.php
-resources/views/warehouse_sampling/admin/index.blade.php
-resources/views/layouts/app.blade.php
 public/assets/css/warehouse-sampling.css
-routes/warehouse_sampling.php
-README_UPDATE_HISTORY_SAMPLING.txt
-CHANGED_FILES.txt

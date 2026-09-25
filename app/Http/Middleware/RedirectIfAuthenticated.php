@@ -15,12 +15,20 @@ class RedirectIfAuthenticated
         $guards = empty($guards) ? [null] : $guards;
 
         foreach ($guards as $guard) {
-            if (Auth::guard($guard)->check()) {
-                /** @var User $user */
-                $user = Auth::guard($guard)->user();
+            if (! Auth::guard($guard)->check()) continue;
 
-                return redirect()->route($user->isAdmin() ? 'admin.dashboard' : 'checker.home');
-            }
+            /** @var User $user */
+            $user = Auth::guard($guard)->user();
+            $route = match ($user->role) {
+                User::ROLE_ADMIN => 'admin.dashboard',
+                User::ROLE_ADMIN_GERAI => 'gerai.admin.home',
+                User::ROLE_CHECKER_GERAI, User::ROLE_GERAI => 'gerai.checker.home',
+                User::ROLE_ADMIN_GUDANG => 'warehouse.admin.index',
+                User::ROLE_CHECKER_GUDANG => 'warehouse.checker.index',
+                default => 'checker.home',
+            };
+
+            return redirect()->route($route);
         }
 
         return $next($request);

@@ -177,20 +177,20 @@ class SampleCheckingService
 
     private function assertUsableCycle(User $user, SampleCycle $cycle): void
     {
-        if (! $user->isGerai()) {
+        if (! $user->isGeraiCheckerRole()) {
             abort(403);
         }
-        if ((int) $cycle->created_by !== (int) $user->id) {
-            abort(403, 'Sample cycle bukan milik user ini.');
+        if ($cycle->cycle_type !== SampleCycle::TYPE_GERAI) {
+            abort(404);
+        }
+        if ((int) $cycle->assigned_checker_id !== (int) $user->id) {
+            abort(403, 'Sample cycle tidak ditugaskan ke Checker Gerai ini.');
         }
         if (! $cycle->isOpen()) {
             throw ValidationException::withMessages(['cycle' => 'Sample cycle sudah ditutup.']);
         }
-        if ($user->hasGeraiWarehouseBinding() && (
-            (int) $user->erp_warehouse_id !== (int) $cycle->erp_warehouse_id
-            || (string) $user->source_database !== (string) $cycle->source_database
-        )) {
-            abort(403, 'User Gerai hanya boleh sampling pada gudang yang sudah ditentukan.');
+        if (! $user->hasWarehouseAssignment((string) $cycle->source_database, (int) $cycle->erp_warehouse_id)) {
+            abort(403, 'Checker Gerai tidak memiliki assignment ke gudang pada cycle ini.');
         }
     }
 }

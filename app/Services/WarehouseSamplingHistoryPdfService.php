@@ -32,33 +32,39 @@ class WarehouseSamplingHistoryPdfService
             $content[] = $this->text(self::L, $y, 'Periode '.$stats['periods'].' | Item '.$stats['items'].' | Baris gudang-item '.$stats['rows'].' | Cocok '.$stats['match'].' | Selisih '.$stats['mismatch'], 7, true); $y -= 12;
             $content[] = $this->line(self::L, $y, self::R, $y); $y -= 11;
 
-            $content[] = $this->text(24, $y, 'Tutup', 5.5, true);
-            $content[] = $this->text(70, $y, 'Periode', 5.5, true);
-            $content[] = $this->text(160, $y, 'Database / Gudang', 5.5, true);
-            $content[] = $this->text(295, $y, 'Item', 5.5, true);
-            $content[] = $this->text(520, $y, 'Sistem', 5.5, true);
-            $content[] = $this->text(575, $y, 'Fisik', 5.5, true);
-            $content[] = $this->text(630, $y, 'Selisih', 5.5, true);
-            $content[] = $this->text(688, $y, 'Hasil', 5.5, true);
-            $content[] = $this->text(738, $y, 'Checker', 5.5, true); $y -= 8;
+            $content[] = $this->text(24, $y, 'Tutup', 5.2, true);
+            $content[] = $this->text(65, $y, 'Periode', 5.2, true);
+            $content[] = $this->text(145, $y, 'Database / Gudang', 5.2, true);
+            $content[] = $this->text(275, $y, 'Item', 5.2, true);
+            $content[] = $this->text(475, $y, 'Awal', 5.2, true);
+            $content[] = $this->text(520, $y, 'SI', 5.2, true);
+            $content[] = $this->text(555, $y, 'Sesudah SI', 5.2, true);
+            $content[] = $this->text(615, $y, 'Fisik', 5.2, true);
+            $content[] = $this->text(660, $y, 'Selisih', 5.2, true);
+            $content[] = $this->text(710, $y, 'Hasil', 5.2, true);
+            $content[] = $this->text(755, $y, 'Checker', 5.2, true); $y -= 8;
             $content[] = $this->line(self::L, $y, self::R, $y); $y -= 10;
 
             foreach ($chunk as $row) {
                 $system = (float) ($row->warehouse_system_qty ?? 0);
+                $sales = (float) ($row->sales_invoice_qty ?? 0);
+                $adjusted = (float) ($row->adjusted_system_qty ?? $system);
                 $physical = (float) ($row->warehouse_physical_qty ?? 0);
-                $content[] = $this->text(24, $y, $this->dateOnly($row->closed_at ?? null), 5.2, false);
-                $content[] = $this->text(70, $y, $this->short((string) $row->cycle_no, 19), 5.2, false);
-                $content[] = $this->text(160, $y, $this->short($row->source_database.' / '.$row->warehouse_code, 28), 5.2, false);
-                $content[] = $this->text(295, $y, $this->short($row->item_code.' '.$row->item_name, 47), 5.2, false);
-                $content[] = $this->text(520, $y, $this->qty($system), 5.2, false);
-                $content[] = $this->text(575, $y, $this->qty($physical), 5.2, false);
-                $content[] = $this->text(630, $y, $this->qty($physical - $system), 5.2, false);
-                $content[] = $this->text(688, $y, $row->warehouse_result === 'MATCH' ? 'COCOK' : 'SELISIH', 5.2, true);
-                $content[] = $this->text(738, $y, $this->short((string) ($row->checker_name ?? '-'), 15), 5.2, false);
+                $content[] = $this->text(24, $y, $this->dateOnly($row->closed_at ?? null), 4.9, false);
+                $content[] = $this->text(65, $y, $this->short((string) $row->cycle_no, 16), 4.9, false);
+                $content[] = $this->text(145, $y, $this->short($row->source_database.' / '.$row->warehouse_code, 25), 4.9, false);
+                $content[] = $this->text(275, $y, $this->short($row->item_code.' '.$row->item_name, 40), 4.9, false);
+                $content[] = $this->text(475, $y, $this->qty($system), 4.9, false);
+                $content[] = $this->text(520, $y, $this->qty($sales), 4.9, false);
+                $content[] = $this->text(555, $y, $this->qty($adjusted), 4.9, false);
+                $content[] = $this->text(615, $y, $this->qty($physical), 4.9, false);
+                $content[] = $this->text(660, $y, $this->qty($physical - $adjusted), 4.9, false);
+                $content[] = $this->text(710, $y, $row->warehouse_result === 'MATCH' ? 'COCOK' : 'SELISIH', 4.9, true);
+                $content[] = $this->text(755, $y, $this->short((string) ($row->checker_name ?? '-'), 12), 4.9, false);
 
                 $comment = trim((string) ($row->checker_comment ?? ''));
                 if ($comment !== '') {
-                    $content[] = $this->text(295, $y - 8, 'Catatan: '.$this->short($comment, 70), 4.7, false);
+                    $content[] = $this->text(275, $y - 8, 'Catatan: '.$this->short($comment, 60), 4.5, false);
                 }
 
                 $y -= 24;

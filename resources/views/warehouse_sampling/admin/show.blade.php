@@ -115,7 +115,20 @@
     <div class="ws-admin-item-list">
         @forelse($items as $item)
             @php
-                $totalVariance = ($item->checked_at === null || $item->physical_qty === null) ? null : (float)$item->physical_qty - (float)$item->system_qty;
+                $salesTotal = 0.0;
+                $adjustedSystemTotal = (float) $item->system_qty;
+
+                if ($item->validated_at) {
+                    $salesTotal = (float) $item->stocks->sum(fn($stock) => (float)($stock->sales_invoice_qty ?? 0));
+                    $adjustedSystemTotal = (float) $item->stocks->sum(fn($stock) => (float)($stock->adjusted_system_qty ?? $stock->system_qty));
+                } elseif ($item->checked_at) {
+                    $salesTotal = (float) $item->stocks->sum(fn($stock) => (float)(($salesInvoiceAdjustments[$stock->id]['sales_qty'] ?? 0)));
+                    $adjustedSystemTotal = (float) $item->stocks->sum(fn($stock) => (float)(($salesInvoiceAdjustments[$stock->id]['adjusted_system_qty'] ?? $stock->system_qty)));
+                }
+
+                $totalVariance = ($item->checked_at === null || $item->physical_qty === null)
+                    ? null
+                    : (float)$item->physical_qty - $adjustedSystemTotal;
             @endphp
             <article class="ws-admin-item-card {{ $item->validated_at ? 'validated' : ($item->checked_at ? 'waiting-validation' : '') }}">
                 <div class="ws-admin-item-head">
@@ -135,8 +148,10 @@
                     </div>
                 </div>
 
-                <div class="ws-total-strip">
-                    <span>Total Sistem<b>{{ number_format((float)$item->system_qty,4,'.',',') }} {{ $item->uom_code }}</b></span>
+                <div class="ws-total-strip ws-total-strip-sales">
+                    <span>Snapshot Sistem<b>{{ number_format((float)$item->system_qty,4,'.',',') }} {{ $item->uom_code }}</b></span>
+                    <span>Sales Invoice Hari Cek<b class="{{ $salesTotal > 0 ? 'negative' : '' }}">{{ $item->checked_at ? number_format($salesTotal,4,'.',',').' '.$item->uom_code : '-' }}</b></span>
+                    <span>Sistem Setelah Sales<b>{{ $item->checked_at ? number_format($adjustedSystemTotal,4,'.',',').' '.$item->uom_code : '-' }}</b></span>
                     <span>Fisik Total Checker<b>{{ ($item->checked_at === null || $item->physical_qty === null) ? '-' : number_format((float)$item->physical_qty,4,'.',',').' '.$item->uom_code }}</b></span>
                     <span>Selisih Total<b class="{{ $totalVariance !== null && $totalVariance < 0 ? 'negative' : ($totalVariance !== null && $totalVariance > 0 ? 'positive' : '') }}">{{ $totalVariance === null ? '-' : number_format($totalVariance,4,'.',',') }}</b></span>
                 </div>
@@ -153,7 +168,12 @@
                         <div class="ws-allocation-horizontal-scroll" aria-label="Hasil alokasi fisik per gudang">
                             <div class="ws-allocation-horizontal-track">
                                 @foreach($item->stocks as $stock)
-                                    @php $variance=(float)$stock->allocated_physical_qty-(float)$stock->system_qty; @endphp
+                                    @php
+                                        $stockSales = (float)($stock->sales_invoice_qty ?? 0);
+                                        $stockAdjusted = (float)($stock->adjusted_system_qty ?? $stock->system_qty);
+                                        $variance=(float)$stock->allocated_physical_qty-$stockAdjusted;
+                                        $invoiceDetails = $stock->sales_invoice_details ?? [];
+                                    @endphp
                                     <article class="ws-allocation-card {{ $variance<0?'is-short':($variance>0?'is-over':'is-match') }}">
                                         <div class="ws-allocation-card-head">
                                             <span>{{ $stock->warehouse?->source_database }}</span>
@@ -162,10 +182,20 @@
                                         <strong class="ws-allocation-warehouse-code">{{ $stock->warehouse?->warehouse_code }}</strong>
                                         <small class="ws-allocation-warehouse-name">{{ $stock->warehouse?->warehouse_name }}</small>
                                         <div class="ws-allocation-card-metrics">
-                                            <span>Stok Sistem<b>{{ number_format((float)$stock->system_qty,4,'.',',') }}</b></span>
+                                            <span>Snapshot Stok<b>{{ number_format((float)$stock->system_qty,4,'.',',') }}</b></span>
+                                            <span>Sales Invoice<b class="{{ $stockSales > 0 ? 'negative' : '' }}">{{ number_format($stockSales,4,'.',',') }}</b></span>
+                                            <span>Stok Setelah Sales<b>{{ number_format($stockAdjusted,4,'.',',') }}</b></span>
                                             <span>Fisik Dialokasikan<b>{{ number_format((float)$stock->allocated_physical_qty,4,'.',',') }}</b></span>
                                             <span>Selisih<b class="{{ $variance<0?'negative':($variance>0?'positive':'') }}">{{ number_format($variance,4,'.',',') }}</b></span>
                                         </div>
+                                        @if($stockSales > 0)
+                                            <div class="ws-sales-invoice-list">
+                                                <strong>Sales Invoice {{ $stock->sales_invoice_date?->format('d/m/Y') }}</strong>
+                                                @foreach($invoiceDetails as $invoice)
+                                                    <span>{{ $invoice['invoice_number'] ?? '-' }} <b>{{ number_format((float)($invoice['qty'] ?? 0),4,'.',',') }}</b></span>
+                                                @endforeach
+                                            </div>
+                                        @endif
                                     </article>
                                 @endforeach
                             </div>
@@ -175,13 +205,18 @@
                         <form method="POST" action="{{ route('warehouse.admin.items.validate',[$period,$item]) }}" class="ws-validation-form" data-physical-total="{{ (float)$item->physical_qty }}" data-system-total="{{ (float)$item->system_qty }}">
                             @csrf @method('PUT')
                             <div class="ws-validation-help">
-                                <strong>Distribusi Qty Fisik Otomatis Secara Proporsional</strong>
-                                <p>Qty fisik total dari checker akan dibagi ke setiap gudang sesuai proporsi stok sistem masing-masing gudang. Admin cukup memeriksa hasil perhitungan lalu menyimpan validasi.</p>
+                                <strong>Validasi Stok Setelah Sales Invoice</strong>
+                                <p>Sistem mengecek Sales Invoice pada tanggal checker untuk item + gudang yang sama. Qty invoice keluar dikurangi dari snapshot stok, lalu Qty fisik checker dibagi proporsional berdasarkan stok setelah pengurangan tersebut.</p>
                             </div>
                             <div class="ws-allocation-horizontal-scroll" aria-label="Distribusi fisik proporsional per gudang">
                                 <div class="ws-allocation-horizontal-track">
                                     @foreach($item->stocks as $stock)
-                                        <article class="ws-allocation-card" data-stock-row data-system="{{ (float)$stock->system_qty }}" data-can-allocate="{{ $stock->item_id !== null && (float)$stock->system_qty > 0 ? '1' : '0' }}">
+                                        @php
+                                            $salesInfo = $salesInvoiceAdjustments[$stock->id] ?? ['sales_date' => $item->checked_at?->format('Y-m-d'), 'sales_qty' => 0, 'adjusted_system_qty' => (float)$stock->system_qty, 'invoices' => []];
+                                            $stockSales = (float)($salesInfo['sales_qty'] ?? 0);
+                                            $stockAdjusted = (float)($salesInfo['adjusted_system_qty'] ?? $stock->system_qty);
+                                        @endphp
+                                        <article class="ws-allocation-card" data-stock-row data-system="{{ $stockAdjusted }}" data-can-allocate="{{ $stock->item_id !== null && $stockAdjusted > 0 ? '1' : '0' }}">
                                             <div class="ws-allocation-card-head">
                                                 <span>{{ $stock->warehouse?->source_database }}</span>
                                                 <span class="ws-allocation-card-index">Gudang {{ $loop->iteration }}</span>
@@ -189,17 +224,29 @@
                                             <strong class="ws-allocation-warehouse-code">{{ $stock->warehouse?->warehouse_code }}</strong>
                                             <small class="ws-allocation-warehouse-name">{{ $stock->warehouse?->warehouse_name }}</small>
                                             <div class="ws-allocation-card-metrics">
-                                                <span>Stok Sistem<b>{{ number_format((float)$stock->system_qty,4,'.',',') }}</b></span>
+                                                <span>Snapshot Stok<b>{{ number_format((float)$stock->system_qty,4,'.',',') }}</b></span>
+                                                <span>Sales Invoice Hari Cek<b class="{{ $stockSales > 0 ? 'negative' : '' }}">{{ number_format($stockSales,4,'.',',') }}</b></span>
+                                                <span>Stok Setelah Sales<b>{{ number_format($stockAdjusted,4,'.',',') }}</b></span>
                                                 <span>Proporsi Stok<b data-proportion>-</b></span>
                                                 <span>Fisik Proporsional<b data-proportional-qty>-</b></span>
                                                 <span>Selisih<b data-row-variance>-</b></span>
                                             </div>
+                                            @if($stockSales > 0)
+                                                <div class="ws-sales-invoice-list">
+                                                    <strong>Sales Invoice {{ !empty($salesInfo['sales_date']) ? \Carbon\Carbon::parse($salesInfo['sales_date'])->format('d/m/Y') : '' }}</strong>
+                                                    @foreach(($salesInfo['invoices'] ?? []) as $invoice)
+                                                        <span>{{ $invoice['invoice_number'] ?? '-' }} <b>{{ number_format((float)($invoice['qty'] ?? 0),4,'.',',') }}</b></span>
+                                                    @endforeach
+                                                </div>
+                                            @endif
                                         </article>
                                     @endforeach
                                 </div>
                             </div>
-                            <div class="ws-allocation-summary">
-                                <span>Total Sistem <b>{{ number_format((float)$item->system_qty,4,'.',',') }}</b></span>
+                            <div class="ws-allocation-summary ws-allocation-summary-sales">
+                                <span>Snapshot Sistem <b>{{ number_format((float)$item->system_qty,4,'.',',') }}</b></span>
+                                <span>Sales Invoice <b class="{{ $salesTotal > 0 ? 'negative' : '' }}">{{ number_format($salesTotal,4,'.',',') }}</b></span>
+                                <span>Sistem Setelah Sales <b>{{ number_format($adjustedSystemTotal,4,'.',',') }}</b></span>
                                 <span>Fisik Checker <b>{{ number_format((float)$item->physical_qty,4,'.',',') }}</b></span>
                                 <span>Total Distribusi <b data-allocation-total>0</b></span>
                             </div>

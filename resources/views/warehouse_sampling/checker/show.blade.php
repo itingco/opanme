@@ -2,7 +2,7 @@
 @section('title','Cek Qty Fisik Total')
 @section('content')
 @push('styles')
-<link rel="stylesheet" href="{{ asset('assets/css/warehouse-sampling.css') }}?v=20260923j">
+<link rel="stylesheet" href="{{ asset('assets/css/warehouse-sampling.css') }}?v=20260924a">
 @endpush
 @php
     $total = (int) $period->items_count;
@@ -12,7 +12,6 @@
     $editable = $period->isOpen() && !$finalized;
     $pct = $total > 0 ? min(100, ($filled / $total) * 100) : 0;
     $targetCount = $total > 0 ? (int) ceil($total * ((float)$period->target_percentage / 100)) : 0;
-    $reached = $targetCount > 0 && $filled >= $targetCount;
 @endphp
 
 <div class="page-heading">
@@ -29,9 +28,9 @@
             <span><b>{{ $warehouse->source_database }} · {{ $warehouse->warehouse_code }}</b>{{ $warehouse->warehouse_name }}</span>
         @endforeach
     </div>
-    <div class="ws-progress {{ $reached?'target-reached':'' }}"><span style="width:{{ $pct }}%"></span></div>
+    <div class="ws-progress"><span style="width:{{ $pct }}%"></span></div>
     <div class="ws-checker-progress-meta">
-        <p class="ws-note"><span id="ws-filled-top">{{ $filled }}</span> / {{ $total }} item terisi ({{ number_format($pct,1) }}%). Target periode {{ number_format((float)$period->target_percentage,0) }}% = minimal {{ $targetCount }} item.</p>
+        <p class="ws-note">{{ $filled }} / {{ $total }} item sudah memiliki draft Qty Fisik ({{ number_format($pct,1) }}%).</p>
         @if($finalized)
             <span class="ws-badge open">FINAL · TERKUNCI</span>
         @elseif($period->isOpen())
@@ -43,129 +42,91 @@
 </section>
 
 @if($finalized)
-    <div class="ws-final-lock-note">
-        <strong>Hasil checker sudah difinalisasi.</strong>
-        Qty Fisik Total dan Komentar Checker sudah dikunci dan tidak dapat diedit lagi. Admin Gudang dapat melanjutkan validasi.
-    </div>
-@elseif($period->isOpen())
-    <div class="ws-lock-note">
-        <strong>Isi Qty Fisik dan komentar langsung di tabel.</strong>
-        Tombol <b>Simpan Draft Semua</b> menyimpan seluruh Qty dan komentar tanpa mengunci data. Setelah semua Qty benar, pilih <b>Simpan Semua & Finalisasi</b> agar hasil checker dikunci.
-    </div>
-@else
-    <div class="alert">Periode sudah CLOSED. Data hanya dapat dilihat.</div>
+    <div class="ws-final-lock-note"><strong>Hasil checker sudah final.</strong> Semua Qty dan komentar dikunci. Admin Gudang dapat melanjutkan validasi.</div>
+@elseif($editable)
+    <div class="ws-lock-note"><strong>Klik kode barang untuk input.</strong> Setiap item disimpan satu per satu sebagai draft melalui modal. Draft masih bisa diedit sampai Anda menekan <b>Finalisasi Semua Item</b>.</div>
 @endif
 
-@if($editable)
-<form method="POST" action="{{ route('warehouse.checker.batch',$period) }}" class="ws-check-batch-form" id="ws-check-batch-form">
-    @csrf
-    @method('PUT')
-@endif
-
-<div class="ws-check-batch-toolbar">
-    <div>
-        <strong>Input Qty Fisik Total & Komentar</strong>
-        <small><span id="ws-filled-count">{{ $filled }}</span> dari {{ $total }} item sudah memiliki Qty Fisik</small>
+<section class="panel ws-modal-input-panel">
+    <div class="panel-head">
+        <div><h2>Daftar Item</h2><small>Klik kode item untuk isi / edit Qty Fisik dan komentar.</small></div>
+        @if($editable)
+            <form method="POST" action="{{ route('warehouse.checker.finalize',$period) }}" onsubmit="return confirm('Finalisasi semua item? Setelah finalisasi Qty dan komentar tidak dapat diedit lagi.')">
+                @csrf
+                <button class="btn primary" type="submit" @disabled($filled < $total || $total === 0)>Finalisasi Semua Item</button>
+            </form>
+        @endif
     </div>
+
+    <div class="ws-check-table-wrap ws-modal-check-table-wrap">
+        <table class="ws-check-input-table">
+            <thead><tr><th>No</th><th>Kode Item</th><th>Nama Item</th><th>UOM</th><th class="num">Qty Fisik Draft</th><th>Komentar</th><th>Status</th></tr></thead>
+            <tbody>
+            @forelse($items as $item)
+                @php($hasDraft = $item->physical_qty !== null)
+                <tr class="{{ $finalized ? 'is-final' : ($hasDraft ? 'is-draft' : '') }}">
+                    <td><strong>#{{ $item->line_no }}</strong></td>
+                    <td>
+                        @if($editable)
+                            <button type="button" class="ws-item-code-button"
+                                data-open-item-modal
+                                data-action="{{ route('warehouse.checker.check',[$period,$item]) }}"
+                                data-line="{{ $item->line_no }}"
+                                data-code="{{ $item->item_code }}"
+                                data-name="{{ $item->item_name }}"
+                                data-uom="{{ $item->uom_code }}"
+                                data-qty="{{ $item->physical_qty }}"
+                                data-comment="{{ $item->checker_comment }}">{{ $item->item_code }}</button>
+                        @else
+                            <strong>{{ $item->item_code }}</strong>
+                        @endif
+                    </td>
+                    <td><strong>{{ $item->item_name }}</strong><small>{{ $item->stocks_count }} gudang terkait</small></td>
+                    <td><span class="ws-uom-pill">{{ $item->uom_code }}</span></td>
+                    <td class="num"><strong>{{ $hasDraft ? number_format((float)$item->physical_qty,4,'.',',') : '-' }}</strong></td>
+                    <td><div class="ws-table-comment-preview">{{ filled($item->checker_comment) ? $item->checker_comment : '-' }}</div></td>
+                    <td>
+                        @if($finalized)<span class="ws-badge open">FINAL</span>
+                        @elseif($hasDraft)<span class="ws-badge draft">DRAFT</span>
+                        @else<span class="ws-badge">BELUM</span>@endif
+                    </td>
+                </tr>
+            @empty
+                <tr><td colspan="7" class="empty">Tidak ada item dalam periode ini.</td></tr>
+            @endforelse
+            </tbody>
+        </table>
+    </div>
+
     @if($editable)
-        <span class="ws-note">Qty dan komentar disimpan bersamaan.</span>
+        <div class="ws-modal-table-footer">
+            <span><strong>{{ $filled }} / {{ $total }}</strong> item sudah disimpan sebagai draft.</span>
+            <span>{{ max(0,$total-$filled) }} item belum diisi.</span>
+        </div>
     @endif
-</div>
-
-<div class="ws-check-table-wrap">
-    <table class="ws-check-input-table">
-        <thead>
-            <tr>
-                <th class="ws-check-no-col">No</th>
-                <th>Item</th>
-                <th class="ws-check-uom-col">UOM</th>
-                <th class="ws-check-qty-col">Qty Fisik Total</th>
-                <th class="ws-check-comment-col">Komentar Checker</th>
-                <th class="ws-check-status-col">Status</th>
-            </tr>
-        </thead>
-        <tbody>
-        @forelse($items as $item)
-            @php
-                $hasDraft = $item->physical_qty !== null;
-                $inputValue = old('physical_qty.'.$item->id, $item->physical_qty);
-                $commentValue = old('checker_comment.'.$item->id, $item->checker_comment);
-            @endphp
-            <tr class="{{ $finalized ? 'is-final' : ($hasDraft ? 'is-draft' : '') }}">
-                <td class="ws-check-no-col"><strong>#{{ $item->line_no }}</strong></td>
-                <td>
-                    <strong class="ws-check-item-code">{{ $item->item_code }}</strong>
-                    <small class="ws-check-item-name">{{ $item->item_name }}</small>
-                    <small class="ws-note">Stok gabungan {{ $item->stocks_count }} gudang</small>
-                </td>
-                <td><span class="ws-uom-pill">{{ $item->uom_code }}</span></td>
-                <td>
-                    @if($editable)
-                        <input
-                            class="ws-table-qty-input"
-                            type="number"
-                            name="physical_qty[{{ $item->id }}]"
-                            min="0"
-                            step="0.0001"
-                            inputmode="decimal"
-                            value="{{ $inputValue }}"
-                            placeholder="0.0000"
-                            data-batch-qty
-                            autocomplete="off">
-                    @else
-                        <strong class="ws-final-qty">{{ $item->physical_qty === null ? '-' : number_format((float)$item->physical_qty,4,'.',',') }}</strong>
-                    @endif
-                </td>
-                <td>
-                    @if($editable)
-                        <textarea
-                            class="ws-table-comment-input"
-                            name="checker_comment[{{ $item->id }}]"
-                            rows="2"
-                            maxlength="1000"
-                            placeholder="Opsional: kondisi fisik, lokasi, kemasan, catatan selisih...">{{ $commentValue }}</textarea>
-                    @else
-                        <div class="ws-final-comment">{{ filled($item->checker_comment) ? $item->checker_comment : '-' }}</div>
-                    @endif
-                </td>
-                <td>
-                    @if($finalized)
-                        <span class="ws-badge open">FINAL</span>
-                    @elseif($hasDraft)
-                        <span class="ws-badge draft">DRAFT</span>
-                    @else
-                        <span class="ws-badge">BELUM</span>
-                    @endif
-                </td>
-            </tr>
-        @empty
-            <tr><td colspan="6" class="empty">Tidak ada item dalam periode ini.</td></tr>
-        @endforelse
-        </tbody>
-    </table>
-</div>
+</section>
 
 @if($editable)
-    <div class="ws-check-batch-actions">
-        <div class="ws-check-batch-status">
-            <strong id="ws-batch-status-title">{{ $filled }} / {{ $total }} item terisi</strong>
-            <small id="ws-batch-status-note">Draft Qty dan komentar dapat disimpan berkali-kali sampai seluruh hasil benar.</small>
-        </div>
-        <div class="ws-check-batch-buttons">
-            <button class="btn" type="submit" name="mode" value="draft">Simpan Draft Semua</button>
-            <button
-                class="btn primary"
-                type="submit"
-                name="mode"
-                value="final"
-                id="ws-finalize-all"
-                @disabled($filled < $total || $total === 0)
-                onclick="return confirm('Finalisasi seluruh Qty Fisik dan Komentar Checker? Setelah proses ini data tidak dapat diedit lagi.')">
-                Simpan Semua & Finalisasi
-            </button>
-        </div>
-    </div>
-</form>
+<div class="ws-item-entry-modal" id="ws-item-entry-modal" hidden>
+    <div class="ws-item-entry-backdrop" data-item-modal-close></div>
+    <section class="ws-item-entry-dialog" role="dialog" aria-modal="true" aria-labelledby="ws-item-modal-title">
+        <header>
+            <div><span class="ws-modal-kicker">INPUT DRAFT CHECKER</span><h2 id="ws-item-modal-title">Item</h2><p id="ws-item-modal-name">-</p></div>
+            <button type="button" class="ws-item-entry-close" data-item-modal-close>×</button>
+        </header>
+        <form method="POST" id="ws-item-entry-form" class="stack-form">@csrf @method('PUT')
+            <div class="ws-modal-item-meta"><span id="ws-item-modal-line">#-</span><span id="ws-item-modal-uom">UOM</span></div>
+            <label>Qty Fisik Total Ditemukan
+                <input type="number" name="physical_qty" id="ws-item-modal-qty" min="0" step="0.0001" inputmode="decimal" required autocomplete="off" placeholder="0.0000">
+            </label>
+            <label>Komentar Checker
+                <textarea name="checker_comment" id="ws-item-modal-comment" rows="4" maxlength="1000" placeholder="Opsional: kondisi fisik, lokasi, kemasan, catatan..."></textarea>
+            </label>
+            <div class="ws-item-entry-actions"><button type="button" class="btn" data-item-modal-close>Batal</button><button type="submit" class="btn primary">Simpan Draft Item</button></div>
+            <small class="ws-note">Menyimpan draft tidak mengunci data. Klik kode item lagi jika ingin mengubah sebelum finalisasi.</small>
+        </form>
+    </section>
+</div>
 @endif
 @endsection
 
@@ -173,29 +134,32 @@
 @if($editable)
 <script>
 document.addEventListener('DOMContentLoaded', () => {
-    const inputs = Array.from(document.querySelectorAll('[data-batch-qty]'));
-    const filledCount = document.getElementById('ws-filled-count');
-    const filledTop = document.getElementById('ws-filled-top');
-    const statusTitle = document.getElementById('ws-batch-status-title');
-    const statusNote = document.getElementById('ws-batch-status-note');
-    const finalButton = document.getElementById('ws-finalize-all');
-    const total = inputs.length;
+    const modal = document.getElementById('ws-item-entry-modal');
+    const form = document.getElementById('ws-item-entry-form');
+    const title = document.getElementById('ws-item-modal-title');
+    const name = document.getElementById('ws-item-modal-name');
+    const line = document.getElementById('ws-item-modal-line');
+    const uom = document.getElementById('ws-item-modal-uom');
+    const qty = document.getElementById('ws-item-modal-qty');
+    const comment = document.getElementById('ws-item-modal-comment');
+    if (!modal || !form) return;
 
-    function refresh() {
-        const filled = inputs.filter(input => String(input.value ?? '').trim() !== '').length;
-        if (filledCount) filledCount.textContent = filled;
-        if (filledTop) filledTop.textContent = filled;
-        if (statusTitle) statusTitle.textContent = `${filled} / ${total} item terisi`;
-        if (finalButton) finalButton.disabled = total === 0 || filled !== total;
-        if (statusNote) {
-            statusNote.textContent = filled === total && total > 0
-                ? 'Semua Qty sudah terisi. Komentar tetap opsional. Anda dapat melakukan finalisasi.'
-                : `${Math.max(0, total - filled)} Qty masih belum diisi. Qty dan komentar tetap dapat disimpan sebagai draft.`;
-        }
-    }
-
-    inputs.forEach(input => input.addEventListener('input', refresh));
-    refresh();
+    const open = button => {
+        form.action = button.dataset.action;
+        title.textContent = button.dataset.code || 'Item';
+        name.textContent = button.dataset.name || '-';
+        line.textContent = `#${button.dataset.line || '-'}`;
+        uom.textContent = button.dataset.uom || '-';
+        qty.value = button.dataset.qty || '';
+        comment.value = button.dataset.comment || '';
+        modal.hidden = false;
+        document.body.classList.add('modal-open');
+        setTimeout(() => qty.focus(), 30);
+    };
+    const close = () => { modal.hidden = true; document.body.classList.remove('modal-open'); };
+    document.querySelectorAll('[data-open-item-modal]').forEach(button => button.addEventListener('click', () => open(button)));
+    document.querySelectorAll('[data-item-modal-close]').forEach(button => button.addEventListener('click', close));
+    document.addEventListener('keydown', event => { if (event.key === 'Escape' && !modal.hidden) close(); });
 });
 </script>
 @endif

@@ -93,6 +93,7 @@ class WarehouseSamplingHistoryService
                     ->orWhere('item.item_name', $operator, $term)
                     ->orWhere('item.checker_comment', $operator, $term)
                     ->orWhere('item.validation_note', $operator, $term)
+                    ->orWhere('stock.sales_invoice_details', $operator, $term)
                     ->orWhere('wh.warehouse_code', $operator, $term)
                     ->orWhere('wh.warehouse_name', $operator, $term)
                     ->orWhere('checker.name', $operator, $term)
@@ -127,6 +128,10 @@ class WarehouseSamplingHistoryService
             'wh.warehouse_code',
             'wh.warehouse_name',
             'stock.system_qty as warehouse_system_qty',
+            'stock.sales_invoice_date',
+            'stock.sales_invoice_qty',
+            'stock.adjusted_system_qty',
+            'stock.sales_invoice_details',
             'stock.allocated_physical_qty as warehouse_physical_qty',
             'stock.result as warehouse_result',
         ]);

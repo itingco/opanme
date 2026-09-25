@@ -85,16 +85,20 @@ Route::get('/', function () {
         return redirect()->route('admin.dashboard');
     }
 
+    if ($user->isAdminGerai()) {
+        return redirect()->route('gerai.admin.home');
+    }
+
+    if ($user->isCheckerGerai() || $user->isLegacyGerai()) {
+        return redirect()->route('gerai.checker.home');
+    }
+
     if ($user->isAdminGudang()) {
         return redirect()->route('warehouse.admin.index');
     }
 
     if ($user->isCheckerGudang()) {
         return redirect()->route('warehouse.checker.index');
-    }
-
-    if ($user->isGerai()) {
-        return redirect()->route('gerai.sampling.home');
     }
 
     return redirect()->route('checker.home');
@@ -374,48 +378,36 @@ Route::middleware(['auth', 'role:CHECKER'])
 
 /*
 |--------------------------------------------------------------------------
-| GERAI SAMPLING
+| GERAI SAMPLING - ADMIN GERAI
 |--------------------------------------------------------------------------
 */
 
-Route::middleware(['auth', 'role:GERAI'])
-    ->prefix('gerai')
-    ->name('gerai.sampling.')
+Route::middleware(['auth', 'role:ADMIN,ADMIN_GERAI'])
+    ->prefix('gerai-admin')
+    ->name('gerai.admin.')
     ->group(function () {
+        Route::get('/', [SamplingController::class, 'home'])->name('home');
+        Route::get('/warehouses', [SamplingController::class, 'warehouses'])->name('warehouses');
+        Route::post('/cycles', [SamplingController::class, 'create'])->name('create');
+    });
 
-        Route::get('/', [SamplingController::class, 'home'])
-            ->name('home');
 
-        Route::get('/warehouses', [SamplingController::class, 'warehouses'])
-            ->name('warehouses');
+/*
+|--------------------------------------------------------------------------
+| GERAI SAMPLING - CHECKER GERAI
+|--------------------------------------------------------------------------
+*/
 
-        Route::post('/cycles', [SamplingController::class, 'create'])
-            ->name('create');
-
-        Route::get(
-            '/cycles/{sampleCycle}/scan',
-            [SamplingController::class, 'scan']
-        )->name('scan');
-
-        Route::post(
-            '/cycles/{sampleCycle}/scan-lookup',
-            [SamplingController::class, 'lookup']
-        )->name('lookup');
-
-        Route::post(
-            '/cycles/{sampleCycle}/scan-confirm',
-            [SamplingController::class, 'confirm']
-        )->name('confirm');
-
-        Route::put(
-            '/cycles/{sampleCycle}/location',
-            [SamplingController::class, 'updateLocation']
-        )->name('location');
-
-        Route::post(
-            '/cycles/{sampleCycle}/close',
-            [SamplingController::class, 'close']
-        )->name('close');
+Route::middleware(['auth', 'role:CHECKER_GERAI,GERAI'])
+    ->prefix('gerai-checker')
+    ->name('gerai.checker.')
+    ->group(function () {
+        Route::get('/', [SamplingController::class, 'checkerHome'])->name('home');
+        Route::get('/cycles/{sampleCycle}/scan', [SamplingController::class, 'scan'])->name('scan');
+        Route::post('/cycles/{sampleCycle}/scan-lookup', [SamplingController::class, 'lookup'])->name('lookup');
+        Route::post('/cycles/{sampleCycle}/scan-confirm', [SamplingController::class, 'confirm'])->name('confirm');
+        Route::put('/cycles/{sampleCycle}/location', [SamplingController::class, 'updateLocation'])->name('location');
+        Route::post('/cycles/{sampleCycle}/close', [SamplingController::class, 'close'])->name('close');
     });
 
 

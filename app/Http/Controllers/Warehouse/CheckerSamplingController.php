@@ -9,7 +9,6 @@ use App\Models\SampleCycleItem;
 use App\Models\SampleCycleItemStock;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
@@ -46,7 +45,6 @@ class CheckerSamplingController extends Controller
             'items as checked_items_count' => fn ($q) => $q->whereNotNull('checked_at'),
         ]);
 
-        // Semua item dimuat dalam satu form supaya checker dapat menyimpan seluruh Qty sekaligus.
         $items = $sampleCycle->items()
             ->withCount('stocks')
             ->orderBy('line_no')
@@ -58,179 +56,116 @@ class CheckerSamplingController extends Controller
         ]);
     }
 
-    /**
-     * Simpan seluruh Qty Fisik Total dalam satu kali submit.
-     * mode=draft : boleh diedit kembali.
-     * mode=final : seluruh item wajib terisi dan sesudahnya dikunci.
-     */
-    public function saveBatch(Request $request, SampleCycle $sampleCycle): RedirectResponse
+    /** Save one item as editable DRAFT from the modal. */
+    public function check(Request $request, SampleCycle $sampleCycle, SampleCycleItem $sampleCycleItem): RedirectResponse
     {
         $this->assertAssigned($request, $sampleCycle);
+        abort_unless((int) $sampleCycleItem->sample_cycle_id === (int) $sampleCycle->id, 404);
         abort_unless($sampleCycle->isOpen(), 422, 'Periode sampling sudah ditutup.');
         abort_if($this->isFinalized($sampleCycle), 422, 'Hasil checker sudah difinalisasi dan tidak dapat diedit lagi.');
 
-        $mode = strtolower(trim((string) $request->input('mode', 'draft')));
-        if (! in_array($mode, ['draft', 'final'], true)) {
-            $mode = 'draft';
-        }
-
         $data = $request->validate([
-            'physical_qty' => ['present', 'array'],
-            'physical_qty.*' => ['nullable', 'numeric', 'min:0', 'max:99999999999999999999'],
-            'checker_comment' => ['nullable', 'array'],
-            'checker_comment.*' => ['nullable', 'string', 'max:1000'],
+            'physical_qty' => ['required','numeric','min:0','max:99999999999999999999'],
+            'checker_comment' => ['nullable','string','max:1000'],
         ]);
 
-        $items = $sampleCycle->items()->orderBy('line_no')->get();
-        if ($items->isEmpty()) {
-            throw ValidationException::withMessages(['physical_qty' => 'Periode ini belum memiliki item sampling.']);
+        DB::transaction(function () use ($request, $sampleCycle, $sampleCycleItem, $data): void {
+            $cycle = SampleCycle::query()->lockForUpdate()->findOrFail($sampleCycle->id);
+            abort_unless($cycle->isOpen(), 422, 'Periode sampling sudah ditutup.');
+            abort_if($this->isFinalized($cycle), 422, 'Hasil checker sudah difinalisasi dan tidak dapat diedit lagi.');
+
+            $item = SampleCycleItem::query()
+                ->where('sample_cycle_id', $cycle->id)
+                ->lockForUpdate()
+                ->findOrFail($sampleCycleItem->id);
+
+            $item->update([
+                'physical_qty' => round((float) $data['physical_qty'], 4),
+                'checker_comment' => trim((string) ($data['checker_comment'] ?? '')) ?: null,
+                'result' => null,
+                'checked_by' => $request->user()->id,
+                'checked_at' => null,
+                // Any new draft invalidates previous Admin validation/allocation.
+                'validated_by' => null,
+                'validated_at' => null,
+                'validation_note' => null,
+            ]);
+
+            SampleCycleItemStock::query()
+                ->where('sample_cycle_item_id', $item->id)
+                ->update([
+                    'allocated_physical_qty' => null,
+                    'result' => null,
+                    'updated_at' => now(),
+                ]);
+        });
+
+        return back()->with('success', 'Item #'.$sampleCycleItem->line_no.' '.$sampleCycleItem->item_code.' disimpan sebagai DRAFT. Nilai masih dapat diedit sebelum finalisasi.');
+    }
+
+    /** Lock all item drafts after every item has a physical quantity. */
+    public function finalize(Request $request, SampleCycle $sampleCycle): RedirectResponse
+    {
+        $this->assertAssigned($request, $sampleCycle);
+        abort_unless($sampleCycle->isOpen(), 422, 'Periode sampling sudah ditutup.');
+        abort_if($this->isFinalized($sampleCycle), 422, 'Hasil checker sudah difinalisasi.');
+
+        $missing = $sampleCycle->items()
+            ->whereNull('physical_qty')
+            ->orderBy('line_no')
+            ->limit(6)
+            ->get(['line_no','item_code']);
+
+        if ($missing->isNotEmpty()) {
+            $preview = $missing->map(fn ($item) => '#'.$item->line_no.' '.$item->item_code)->implode(', ');
+            throw ValidationException::withMessages([
+                'physical_qty' => 'Finalisasi belum dapat dilakukan. Masih ada item tanpa Qty Fisik: '.$preview.'.',
+            ]);
         }
 
-        $values = $this->normalizeQuantities($items, $data['physical_qty'] ?? [], $mode === 'final');
-        $comments = $this->normalizeComments($items, $data['checker_comment'] ?? []);
-        $filled = collect($values)->filter(fn ($value) => $value !== null)->count();
+        DB::transaction(function () use ($request, $sampleCycle): void {
+            $cycle = SampleCycle::query()->lockForUpdate()->findOrFail($sampleCycle->id);
+            abort_unless($cycle->isOpen(), 422, 'Periode sampling sudah ditutup.');
+            abort_if($this->isFinalized($cycle), 422, 'Hasil checker sudah difinalisasi.');
 
-        DB::transaction(function () use ($request, $sampleCycle, $items, $values, $comments, $mode): void {
-            $lockedCycle = SampleCycle::query()->lockForUpdate()->findOrFail($sampleCycle->id);
-            abort_unless($lockedCycle->isOpen(), 422, 'Periode sampling sudah ditutup.');
-            abort_if($this->isFinalized($lockedCycle), 422, 'Hasil checker sudah difinalisasi dan tidak dapat diedit lagi.');
-
-            $lockedItems = SampleCycleItem::query()
-                ->where('sample_cycle_id', $lockedCycle->id)
+            $items = SampleCycleItem::query()
+                ->where('sample_cycle_id', $cycle->id)
                 ->orderBy('line_no')
                 ->lockForUpdate()
                 ->get();
 
-            $checkedAt = $mode === 'final' ? now() : null;
-            $itemIds = [];
-
-            foreach ($lockedItems as $item) {
-                $physical = $values[(int) $item->id] ?? null;
-                $system = round((float) $item->system_qty, 4);
-
-                $item->update([
-                    'physical_qty' => $physical,
-                    'checker_comment' => $comments[(int) $item->id] ?? null,
-                    // Draft belum dianggap selesai. Result/check timestamp baru resmi saat finalisasi.
-                    'result' => $mode === 'final'
-                        ? (abs((float) $physical - $system) < 0.0001
-                            ? SampleCheck::RESULT_MATCH
-                            : SampleCheck::RESULT_MISMATCH)
-                        : null,
-                    'checked_by' => $physical !== null ? $request->user()->id : null,
-                    'checked_at' => $checkedAt,
-                    // Perubahan checker selalu membatalkan alokasi/validasi admin sebelumnya.
-                    'validated_by' => null,
-                    'validated_at' => null,
-                    'validation_note' => null,
-                ]);
-
-                $itemIds[] = (int) $item->id;
+            if ($items->isEmpty() || $items->contains(fn ($item) => $item->physical_qty === null)) {
+                throw ValidationException::withMessages(['physical_qty' => 'Semua item wajib memiliki Qty Fisik sebelum finalisasi.']);
             }
 
-            if ($itemIds !== []) {
-                SampleCycleItemStock::query()
-                    ->whereIn('sample_cycle_item_id', $itemIds)
-                    ->update([
-                        'allocated_physical_qty' => null,
-                        'result' => null,
-                        'updated_at' => now(),
-                    ]);
+            $checkedAt = now();
+            foreach ($items as $item) {
+                $physical = round((float) $item->physical_qty, 4);
+                $system = round((float) $item->system_qty, 4);
+                $item->update([
+                    'result' => abs($physical - $system) < 0.0001 ? SampleCheck::RESULT_MATCH : SampleCheck::RESULT_MISMATCH,
+                    'checked_by' => $item->checked_by ?: $request->user()->id,
+                    'checked_at' => $checkedAt,
+                ]);
             }
         });
 
-        if ($mode === 'final') {
-            return back()->with('success', $items->count().' Qty Fisik Total berhasil disimpan dan DIFINALISASI. Data checker sekarang terkunci dan tidak dapat diedit lagi.');
-        }
-
-        return back()->with('success', $filled.' dari '.$items->count().' Qty Fisik Total berhasil disimpan sebagai DRAFT. Anda masih dapat mengubah nilainya sebelum finalisasi.');
+        return back()->with('success', 'Semua draft Qty Fisik sudah DIFINALISASI. Data checker sekarang terkunci dan tidak dapat diedit lagi.');
     }
 
-    /**
-     * Endpoint lama dipertahankan supaya route lama tidak rusak, tetapi proses per-item
-     * sudah dinonaktifkan. Halaman checker sekarang wajib menggunakan batch save.
-     */
-    public function check(
-        Request $request,
-        SampleCycle $sampleCycle,
-        SampleCycleItem $sampleCycleItem
-    ): RedirectResponse {
+    /** Old batch endpoint intentionally disabled after switching to modal per item. */
+    public function saveBatch(Request $request, SampleCycle $sampleCycle): RedirectResponse
+    {
         $this->assertAssigned($request, $sampleCycle);
-        abort_unless((int) $sampleCycleItem->sample_cycle_id === (int) $sampleCycle->id, 404);
-
         throw ValidationException::withMessages([
-            'physical_qty' => 'Penyimpanan per item sudah dinonaktifkan. Gunakan tombol Simpan Draft Semua atau Simpan Semua & Finalisasi.',
+            'physical_qty' => 'Batch save sudah dinonaktifkan. Klik kode barang, isi modal, lalu Simpan Draft per item.',
         ]);
-    }
-
-    /** @return array<int, float|null> */
-    private function normalizeQuantities(Collection $items, array $input, bool $requireAll): array
-    {
-        $values = [];
-        $missing = [];
-
-        foreach ($items as $item) {
-            $raw = $input[(string) $item->id] ?? $input[$item->id] ?? null;
-
-            if ($raw === '' || $raw === null) {
-                $values[(int) $item->id] = null;
-                if ($requireAll) {
-                    $missing[] = '#'.$item->line_no.' '.$item->item_code;
-                }
-                continue;
-            }
-
-            if (! is_numeric($raw) || (float) $raw < 0) {
-                throw ValidationException::withMessages([
-                    'physical_qty' => 'Qty fisik pada item #'.$item->line_no.' '.$item->item_code.' tidak valid.',
-                ]);
-            }
-
-            $values[(int) $item->id] = round((float) $raw, 4);
-        }
-
-        if ($requireAll && $missing !== []) {
-            $preview = implode(', ', array_slice($missing, 0, 5));
-            if (count($missing) > 5) {
-                $preview .= ' dan '.(count($missing) - 5).' item lainnya';
-            }
-
-            throw ValidationException::withMessages([
-                'physical_qty' => 'Finalisasi belum dapat dilakukan. Isi Qty Fisik Total untuk seluruh item. Belum terisi: '.$preview.'.',
-            ]);
-        }
-
-        return $values;
-    }
-
-
-    /** @return array<int, string|null> */
-    private function normalizeComments(Collection $items, array $input): array
-    {
-        $values = [];
-
-        foreach ($items as $item) {
-            $raw = $input[(string) $item->id] ?? $input[$item->id] ?? null;
-            if ($raw === null) {
-                $values[(int) $item->id] = null;
-                continue;
-            }
-
-            $comment = trim((string) $raw);
-            $values[(int) $item->id] = $comment === '' ? null : $comment;
-        }
-
-        return $values;
     }
 
     private function isFinalized(SampleCycle $cycle): bool
     {
         $total = $cycle->items()->count();
-        if ($total === 0) {
-            return false;
-        }
-
-        return ! $cycle->items()->whereNull('checked_at')->exists();
+        return $total > 0 && ! $cycle->items()->whereNull('checked_at')->exists();
     }
 
     private function assertAssigned(Request $request, SampleCycle $cycle): void

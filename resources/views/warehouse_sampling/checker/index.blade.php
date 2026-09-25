@@ -7,7 +7,7 @@
 <div class="page-heading">
     <div>
         <h1>Tugas Sampling Gudang</h1>
-        <p>Isi Qty Fisik Total seluruh item sebagai draft, lalu finalisasi sekaligus setelah pengecekan selesai.</p>
+        <p>Klik kode barang, isi Qty Fisik dan komentar melalui modal, lalu simpan draft satu per satu. Finalisasi setelah semua item selesai.</p>
     </div>
 </div>
 <section class="panel">

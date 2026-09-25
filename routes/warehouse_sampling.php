@@ -38,6 +38,6 @@ Route::middleware(['auth', 'role:CHECKER_GUDANG'])
     ->group(function () {
         Route::get('/', [CheckerSamplingController::class, 'index'])->name('index');
         Route::get('/periods/{sampleCycle}', [CheckerSamplingController::class, 'show'])->name('show');
-        Route::put('/periods/{sampleCycle}/batch', [CheckerSamplingController::class, 'saveBatch'])->name('batch');
+        Route::post('/periods/{sampleCycle}/finalize', [CheckerSamplingController::class, 'finalize'])->name('finalize');
         Route::put('/periods/{sampleCycle}/items/{sampleCycleItem}', [CheckerSamplingController::class, 'check'])->name('check');
     });

@@ -69,13 +69,16 @@ class WarehouseSamplingHistoryController extends Controller
             'Database', 'Warehouse ID', 'Kode Gudang', 'Nama Gudang',
             'Line', 'Kode Item', 'Nama Item', 'UOM',
             'Total Sistem Gabungan', 'Fisik Total Checker',
-            'Stok Sistem Gudang', 'Fisik Alokasi Gudang', 'Selisih Gudang', 'Hasil Gudang',
+            'Stok Sistem Gudang', 'Tanggal Sales Invoice', 'Qty Sales Invoice Hari Cek', 'Stok Setelah Sales', 'Nomor Sales Invoice',
+            'Fisik Alokasi Gudang', 'Selisih Gudang', 'Hasil Gudang',
             'Komentar Checker', 'Catatan Validasi',
         ];
 
         $rows = (function () use ($history, $request, $filters) {
             foreach ($history->orderedQuery($request->user(), $filters)->cursor() as $row) {
                 $system = (float) ($row->warehouse_system_qty ?? 0);
+                $sales = (float) ($row->sales_invoice_qty ?? 0);
+                $adjusted = (float) ($row->adjusted_system_qty ?? $system);
                 $physical = (float) ($row->warehouse_physical_qty ?? 0);
                 yield [
                     $this->dateTime($row->closed_at),
@@ -97,8 +100,12 @@ class WarehouseSamplingHistoryController extends Controller
                     $this->number($row->total_system_qty),
                     $this->number($row->checker_physical_total),
                     $system,
+                    $row->sales_invoice_date ? date('Y-m-d', strtotime((string) $row->sales_invoice_date)) : '',
+                    $sales,
+                    $adjusted,
+                    $this->invoiceNumbers($row->sales_invoice_details ?? null),
                     $physical,
-                    round($physical - $system, 4),
+                    round($physical - $adjusted, 4),
                     $row->warehouse_result === 'MATCH' ? 'COCOK' : ($row->warehouse_result === 'MISMATCH' ? 'SELISIH' : ''),
                     $row->checker_comment,
                     $row->validation_note,
@@ -113,6 +120,19 @@ class WarehouseSamplingHistoryController extends Controller
             'History-Sampling-Gudang-'.now()->format('Ymd-His').'.xlsx',
             ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']
         )->deleteFileAfterSend(true);
+    }
+
+    private function invoiceNumbers(mixed $value): string
+    {
+        if ($value === null || $value === '') return '';
+        $details = is_array($value) ? $value : json_decode((string) $value, true);
+        if (! is_array($details)) return '';
+
+        return collect($details)
+            ->map(fn ($row) => trim((string) ($row['invoice_number'] ?? '')))
+            ->filter()
+            ->unique()
+            ->implode(', ');
     }
 
     private function number(mixed $value): float|string

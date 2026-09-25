@@ -11,11 +11,11 @@
 
 <div class="sampling-shell"
      data-sampling-scanner
-     data-lookup-url="{{ route('gerai.sampling.lookup',$cycle) }}"
-     data-confirm-url="{{ route('gerai.sampling.confirm',$cycle) }}">
+     data-lookup-url="{{ route('gerai.checker.lookup',$cycle) }}"
+     data-confirm-url="{{ route('gerai.checker.confirm',$cycle) }}">
 
     <div class="sampling-nav-row">
-        <a class="sampling-back" href="{{ route('gerai.sampling.home') }}">← Sampling</a>
+        <a class="sampling-back" href="{{ route('gerai.checker.home') }}">← Sampling</a>
         <span class="sampling-count-inline"><strong id="sample-count">{{ number_format($checkCount) }}</strong> item dicek</span>
     </div>
 
@@ -129,7 +129,7 @@
 
         <details class="change-location sampling-change-location">
             <summary>Ganti Lokasi / Rak</summary>
-            <form method="POST" action="{{ route('gerai.sampling.location',$cycle) }}" class="location-form compact">
+            <form method="POST" action="{{ route('gerai.checker.location',$cycle) }}" class="location-form compact">
                 @csrf
                 @method('PUT')
                 <label>
@@ -155,7 +155,7 @@
         <div class="sampling-history-content">
             @if($cycle->isOpen())
                 <div class="sampling-history-actions">
-                    <form method="POST" action="{{ route('gerai.sampling.close',$cycle) }}" onsubmit="return confirm('Tutup sample cycle ini? Setelah ditutup tidak bisa scan lagi.')">
+                    <form method="POST" action="{{ route('gerai.checker.close',$cycle) }}" onsubmit="return confirm('Tutup sample cycle ini? Setelah ditutup tidak bisa scan lagi.')">
                         @csrf
                         <button class="btn" type="submit">Tutup Cycle</button>
                     </form>

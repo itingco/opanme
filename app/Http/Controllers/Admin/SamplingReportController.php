@@ -36,7 +36,7 @@ class SamplingReportController extends Controller
             'stats' => $report->stats($filters),
             'coverage' => $coverage,
             'coverageError' => $coverageError,
-            'users' => User::query()->where('role', User::ROLE_GERAI)->orderBy('name')->get(['id','name']),
+            'users' => User::query()->whereIn('role', [User::ROLE_CHECKER_GERAI, User::ROLE_GERAI])->orderBy('name')->get(['id','name']),
             'databases' => [StockOpnameCycle::DB_INGCO, StockOpnameCycle::DB_SMI],
             'warehouses' => $warehouses,
         ]);

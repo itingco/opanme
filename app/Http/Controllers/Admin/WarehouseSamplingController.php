@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Services\ErpCatalogService;
 use App\Services\SampleCycleNumberService;
 use App\Services\WarehouseSamplingMultiStockService;
+use App\Services\WarehouseSamplingPendingTransferService;
 use App\Services\WarehouseSamplingSalesInvoiceService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -115,7 +116,8 @@ class WarehouseSamplingController extends Controller
     public function show(
         Request $request,
         SampleCycle $sampleCycle,
-        WarehouseSamplingSalesInvoiceService $salesInvoices
+        WarehouseSamplingSalesInvoiceService $salesInvoices,
+        WarehouseSamplingPendingTransferService $pendingTransfers
     ): View
     {
         $this->assertManage($request, $sampleCycle);
@@ -139,14 +141,17 @@ class WarehouseSamplingController extends Controller
             ->orderBy('line_no')
             ->paginate(50);
 
-        $salesInvoiceAdjustments = $salesInvoices->forItems(
-            $items->getCollection()->filter(fn (SampleCycleItem $item) => $item->checked_at !== null && $item->validated_at === null)->values()
-        );
+        $pendingItems = $items->getCollection()
+            ->filter(fn (SampleCycleItem $item) => $item->checked_at !== null && $item->validated_at === null)
+            ->values();
+        $salesInvoiceAdjustments = $salesInvoices->forItems($pendingItems);
+        $pendingTransferAdjustments = $pendingTransfers->forItems($pendingItems, $salesInvoiceAdjustments);
 
         return view('warehouse_sampling.admin.show', [
             'period' => $sampleCycle,
             'items' => $items,
             'salesInvoiceAdjustments' => $salesInvoiceAdjustments,
+            'pendingTransferAdjustments' => $pendingTransferAdjustments,
             'checkers' => User::query()
                 ->where('role', User::ROLE_CHECKER_GUDANG)
                 ->where('is_active', true)
@@ -322,7 +327,8 @@ class WarehouseSamplingController extends Controller
         Request $request,
         SampleCycle $sampleCycle,
         SampleCycleItem $sampleCycleItem,
-        WarehouseSamplingSalesInvoiceService $salesInvoices
+        WarehouseSamplingSalesInvoiceService $salesInvoices,
+        WarehouseSamplingPendingTransferService $pendingTransfers
     ): RedirectResponse {
         $this->assertManage($request, $sampleCycle);
         abort_unless((int) $sampleCycleItem->sample_cycle_id === (int) $sampleCycle->id, 404);
@@ -332,7 +338,7 @@ class WarehouseSamplingController extends Controller
             'validation_note' => ['nullable', 'string', 'max:2000'],
         ]);
 
-        DB::transaction(function () use ($request, $sampleCycleItem, $data, $salesInvoices): void {
+        DB::transaction(function () use ($request, $sampleCycleItem, $data, $salesInvoices, $pendingTransfers): void {
             $item = SampleCycleItem::query()->lockForUpdate()->findOrFail($sampleCycleItem->id);
             $item->loadMissing('cycle');
 
@@ -347,8 +353,11 @@ class WarehouseSamplingController extends Controller
             // Sales Invoice dibaca ulang pada saat tombol validasi ditekan supaya
             // angka yang disimpan merupakan kondisi terbaru di tanggal checker.
             $salesAdjustments = $salesInvoices->forItems(collect([$item]));
+            // Pending Good Transfer dibaca ulang saat validasi. Hanya transfer dengan
+            // DestinationWarehouseID = gudang yang dicek dan ReceivedBy IS NULL yang dihitung.
+            $pendingTransferAdjustments = $pendingTransfers->forItems(collect([$item]), $salesAdjustments);
 
-            $adjustedByStock = [];
+            $validationSystemByStock = [];
             foreach ($stocks as $stock) {
                 $sales = $salesAdjustments[(int) $stock->id] ?? [
                     'sales_date' => $item->checked_at?->format('Y-m-d'),
@@ -357,24 +366,35 @@ class WarehouseSamplingController extends Controller
                     'invoices' => [],
                 ];
 
-                $adjustedByStock[(int) $stock->id] = round((float) $sales['adjusted_system_qty'], 4);
+                $afterSales = round((float) $sales['adjusted_system_qty'], 4);
+                $pending = $pendingTransferAdjustments[(int) $stock->id] ?? [
+                    'pending_transfer_qty' => 0.0,
+                    'validation_system_qty' => $afterSales,
+                    'transfers' => [],
+                    'conversion_warnings' => [],
+                ];
+                $validationSystemByStock[(int) $stock->id] = round((float) ($pending['validation_system_qty'] ?? $afterSales), 4);
+
                 $stock->setAttribute('sales_invoice_date', $sales['sales_date']);
                 $stock->setAttribute('sales_invoice_qty', round((float) $sales['sales_qty'], 4));
-                $stock->setAttribute('adjusted_system_qty', $adjustedByStock[(int) $stock->id]);
+                $stock->setAttribute('adjusted_system_qty', $afterSales);
                 $stock->setAttribute('sales_invoice_details', $sales['invoices']);
+                $stock->setAttribute('pending_transfer_qty', round((float) ($pending['pending_transfer_qty'] ?? 0), 4));
+                $stock->setAttribute('pending_transfer_details', $pending['transfers'] ?? []);
+                $stock->setAttribute('validation_system_qty', $validationSystemByStock[(int) $stock->id]);
             }
 
             $physicalTotal = round((float) $item->physical_qty, 4);
-            $eligible = $stocks->filter(function (SampleCycleItemStock $stock) use ($adjustedByStock): bool {
-                return $stock->item_id !== null && ($adjustedByStock[(int) $stock->id] ?? 0) > 0;
+            $eligible = $stocks->filter(function (SampleCycleItemStock $stock) use ($validationSystemByStock): bool {
+                return $stock->item_id !== null && ($validationSystemByStock[(int) $stock->id] ?? 0) > 0;
             })->values();
-            $adjustedSystemTotal = round((float) $eligible->sum(
-                fn (SampleCycleItemStock $stock): float => (float) ($adjustedByStock[(int) $stock->id] ?? 0)
+            $validationSystemTotal = round((float) $eligible->sum(
+                fn (SampleCycleItemStock $stock): float => (float) ($validationSystemByStock[(int) $stock->id] ?? 0)
             ), 4);
 
-            if ($adjustedSystemTotal <= 0 && $physicalTotal > 0) {
+            if ($validationSystemTotal <= 0 && $physicalTotal > 0) {
                 throw ValidationException::withMessages([
-                    'validation_note' => 'Distribusi proporsional tidak dapat dihitung karena total stok sistem setelah dikurangi Sales Invoice adalah 0 atau minus.',
+                    'validation_note' => 'Distribusi proporsional tidak dapat dihitung karena total stok validasi (snapshot - Sales Invoice + Pending Good Transfer) adalah 0 atau minus.',
                 ]);
             }
 
@@ -382,10 +402,10 @@ class WarehouseSamplingController extends Controller
             $allocated = 0.0;
             foreach ($eligible as $index => $stock) {
                 $isLast = $index === $eligible->count() - 1;
-                $adjustedSystem = (float) ($adjustedByStock[(int) $stock->id] ?? 0);
+                $validationSystem = (float) ($validationSystemByStock[(int) $stock->id] ?? 0);
                 $value = $isLast
                     ? round($physicalTotal - $allocated, 4)
-                    : round($physicalTotal * ($adjustedSystem / $adjustedSystemTotal), 4);
+                    : round($physicalTotal * ($validationSystem / $validationSystemTotal), 4);
 
                 if (abs($value) < 0.0001) {
                     $value = 0.0;
@@ -397,12 +417,12 @@ class WarehouseSamplingController extends Controller
 
             foreach ($stocks as $stock) {
                 $physical = round((float) ($allocations[(int) $stock->id] ?? 0), 4);
-                $adjustedSystem = round((float) ($adjustedByStock[(int) $stock->id] ?? $stock->system_qty), 4);
+                $validationSystem = round((float) ($validationSystemByStock[(int) $stock->id] ?? $stock->system_qty), 4);
 
                 $stock->save();
                 $stock->update([
                     'allocated_physical_qty' => $physical,
-                    'result' => abs($physical - $adjustedSystem) < 0.0001
+                    'result' => abs($physical - $validationSystem) < 0.0001
                         ? SampleCheck::RESULT_MATCH
                         : SampleCheck::RESULT_MISMATCH,
                 ]);
@@ -415,7 +435,7 @@ class WarehouseSamplingController extends Controller
             ]);
         });
 
-        return back()->with('success', 'Validasi '.$sampleCycleItem->item_code.' berhasil. Sales Invoice pada tanggal pengecekan sudah dikurangi dari stok sistem sebelum Qty Fisik dibagi proporsional.');
+        return back()->with('success', 'Validasi '.$sampleCycleItem->item_code.' berhasil. Stok validasi dihitung dari Snapshot - Sales Invoice + Pending Good Transfer belum Received, lalu Qty Fisik dibagi proporsional.');
     }
 
     public function close(Request $request, SampleCycle $sampleCycle): RedirectResponse

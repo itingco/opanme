@@ -100,7 +100,10 @@
                     <th class="num">Snapshot Gudang</th>
                     <th class="num">Sales Invoice</th>
                     <th class="num">Sistem Setelah Sales</th>
+                    <th class="num">Pending GT</th>
+                    <th class="num">Stok Validasi</th>
                     <th>No Sales Invoice</th>
+                    <th>No Good Transfer</th>
                     <th class="num">Alokasi Fisik</th>
                     <th class="num">Selisih</th>
                     <th>Hasil</th>
@@ -116,13 +119,20 @@
                     $warehouseSystem = (float)($row->warehouse_system_qty ?? 0);
                     $salesInvoiceQty = (float)($row->sales_invoice_qty ?? 0);
                     $adjustedSystem = (float)($row->adjusted_system_qty ?? $warehouseSystem);
+                    $pendingTransferQty = (float)($row->pending_transfer_qty ?? 0);
+                    $validationSystem = (float)($row->validation_system_qty ?? ($adjustedSystem + $pendingTransferQty));
                     $warehousePhysical = (float)($row->warehouse_physical_qty ?? 0);
-                    $variance = $warehousePhysical - $adjustedSystem;
+                    $variance = $warehousePhysical - $validationSystem;
                     $invoiceDetails = is_array($row->sales_invoice_details ?? null)
                         ? $row->sales_invoice_details
                         : json_decode((string)($row->sales_invoice_details ?? ''), true);
                     $invoiceNumbers = collect(is_array($invoiceDetails) ? $invoiceDetails : [])
                         ->pluck('invoice_number')->filter()->unique()->implode(', ');
+                    $transferDetails = is_array($row->pending_transfer_details ?? null)
+                        ? $row->pending_transfer_details
+                        : json_decode((string)($row->pending_transfer_details ?? ''), true);
+                    $transferNumbers = collect(is_array($transferDetails) ? $transferDetails : [])
+                        ->pluck('mutation_number')->filter()->unique()->implode(', ');
                 @endphp
                 <tr>
                     <td>{{ $row->closed_at ? \Carbon\Carbon::parse($row->closed_at)->format('d/m/Y H:i') : '-' }}</td>
@@ -137,7 +147,10 @@
                     <td class="num">{{ number_format($warehouseSystem,4,'.',',') }}</td>
                     <td class="num {{ $salesInvoiceQty > 0 ? 'negative' : '' }}">{{ number_format($salesInvoiceQty,4,'.',',') }}</td>
                     <td class="num">{{ number_format($adjustedSystem,4,'.',',') }}</td>
+                    <td class="num {{ $pendingTransferQty > 0 ? 'positive' : '' }}">{{ number_format($pendingTransferQty,4,'.',',') }}</td>
+                    <td class="num">{{ number_format($validationSystem,4,'.',',') }}</td>
                     <td class="ws-history-comment">{{ $invoiceNumbers ?: '-' }}</td>
+                    <td class="ws-history-comment">{{ $transferNumbers ?: '-' }}</td>
                     <td class="num">{{ number_format($warehousePhysical,4,'.',',') }}</td>
                     <td class="num {{ $variance < 0 ? 'negative' : ($variance > 0 ? 'positive' : '') }}">{{ number_format($variance,4,'.',',') }}</td>
                     <td><span class="ws-history-result {{ strtolower((string)$row->warehouse_result) }}">{{ $row->warehouse_result==='MATCH' ? 'COCOK' : ($row->warehouse_result==='MISMATCH' ? 'SELISIH' : '-') }}</span></td>
@@ -147,7 +160,7 @@
                     <td class="ws-history-comment">{{ $row->validation_note ?: '-' }}</td>
                 </tr>
             @empty
-                <tr><td colspan="20" class="empty">Belum ada history Sampling Gudang CLOSED yang sesuai filter.</td></tr>
+                <tr><td colspan="23" class="empty">Belum ada history Sampling Gudang CLOSED yang sesuai filter.</td></tr>
             @endforelse
             </tbody>
         </table>

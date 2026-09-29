@@ -884,3 +884,11 @@
 @media(max-width:1400px){.page-wrap.ws-history-page{width:min(calc(100vw - 34px),1500px)}.ws-history-filter-grid-full{grid-template-columns:repeat(4,minmax(0,1fr))}.ws-history-search-field-full{grid-column:1/-1}.ws-history-filter-actions-full{grid-column:1/-1;justify-content:flex-end}.ws-history-hero h1{font-size:32px}}
 @media(max-width:960px){.page-wrap.ws-history-page{width:min(calc(100vw - 22px),100%);margin:18px auto 36px}.ws-history-hero{flex-direction:column;align-items:flex-start}.ws-history-hero-actions{width:100%;justify-content:flex-start}.ws-history-filter-grid-full{grid-template-columns:1fr 1fr}.ws-history-search-field-full{grid-column:1/-1}.ws-history-filter-actions-full{grid-column:1/-1;justify-content:stretch}.ws-history-filter-actions-full .btn,.ws-history-filter-actions-full button{flex:1}.ws-history-metrics-full{grid-template-columns:repeat(2,minmax(0,1fr))}.ws-history-table-head-full{flex-direction:column;align-items:flex-start}.ws-history-table-note{text-align:left;justify-items:start}.ws-history-table-scroll-full{max-height:70vh}}
 @media(max-width:640px){.ws-history-hero{padding:18px}.ws-history-hero h1{font-size:27px}.ws-history-hero p{font-size:14px}.ws-history-filter-grid-full{grid-template-columns:1fr}.ws-history-metrics-full{grid-template-columns:1fr 1fr}.ws-history-metric-card strong{font-size:26px}}
+
+/* 2026-09-29 - Pending Good Transfer during warehouse sampling validation */
+.ws-pending-transfer-list{margin-top:10px;border:1px solid #b7ebc6;background:#f2fff6;border-radius:10px;padding:9px 10px;display:grid;gap:5px}
+.ws-pending-transfer-list>strong{font-size:11px;color:#067647}
+.ws-pending-transfer-list>span{display:flex;justify-content:space-between;gap:10px;font-size:10px;color:#344054;line-height:1.35}
+.ws-pending-transfer-list>span b{white-space:nowrap;color:#067647}
+.ws-transfer-warning{margin-top:8px;border:1px solid #f5c2a5;background:#fff8f2;color:#9a3412;border-radius:9px;padding:8px 9px;display:grid;gap:4px;font-size:10px;line-height:1.35}
+.ws-history-table-full{min-width:2920px}

@@ -33,34 +33,38 @@ class WarehouseSamplingHistoryPdfService
             $content[] = $this->line(self::L, $y, self::R, $y); $y -= 11;
 
             $content[] = $this->text(24, $y, 'Tutup', 5.2, true);
-            $content[] = $this->text(65, $y, 'Periode', 5.2, true);
-            $content[] = $this->text(145, $y, 'Database / Gudang', 5.2, true);
-            $content[] = $this->text(275, $y, 'Item', 5.2, true);
-            $content[] = $this->text(475, $y, 'Awal', 5.2, true);
-            $content[] = $this->text(520, $y, 'SI', 5.2, true);
-            $content[] = $this->text(555, $y, 'Sesudah SI', 5.2, true);
-            $content[] = $this->text(615, $y, 'Fisik', 5.2, true);
-            $content[] = $this->text(660, $y, 'Selisih', 5.2, true);
-            $content[] = $this->text(710, $y, 'Hasil', 5.2, true);
-            $content[] = $this->text(755, $y, 'Checker', 5.2, true); $y -= 8;
+            $content[] = $this->text(62, $y, 'Periode', 5.2, true);
+            $content[] = $this->text(137, $y, 'Database / Gudang', 5.2, true);
+            $content[] = $this->text(258, $y, 'Item', 5.2, true);
+            $content[] = $this->text(445, $y, 'Awal', 5.2, true);
+            $content[] = $this->text(486, $y, 'SI', 5.2, true);
+            $content[] = $this->text(522, $y, 'GT', 5.2, true);
+            $content[] = $this->text(558, $y, 'Validasi', 5.2, true);
+            $content[] = $this->text(605, $y, 'Fisik', 5.2, true);
+            $content[] = $this->text(650, $y, 'Selisih', 5.2, true);
+            $content[] = $this->text(702, $y, 'Hasil', 5.2, true);
+            $content[] = $this->text(750, $y, 'Checker', 5.2, true); $y -= 8;
             $content[] = $this->line(self::L, $y, self::R, $y); $y -= 10;
 
             foreach ($chunk as $row) {
                 $system = (float) ($row->warehouse_system_qty ?? 0);
                 $sales = (float) ($row->sales_invoice_qty ?? 0);
                 $adjusted = (float) ($row->adjusted_system_qty ?? $system);
+                $pendingGt = (float) ($row->pending_transfer_qty ?? 0);
+                $validation = (float) ($row->validation_system_qty ?? ($adjusted + $pendingGt));
                 $physical = (float) ($row->warehouse_physical_qty ?? 0);
                 $content[] = $this->text(24, $y, $this->dateOnly($row->closed_at ?? null), 4.9, false);
-                $content[] = $this->text(65, $y, $this->short((string) $row->cycle_no, 16), 4.9, false);
-                $content[] = $this->text(145, $y, $this->short($row->source_database.' / '.$row->warehouse_code, 25), 4.9, false);
-                $content[] = $this->text(275, $y, $this->short($row->item_code.' '.$row->item_name, 40), 4.9, false);
-                $content[] = $this->text(475, $y, $this->qty($system), 4.9, false);
-                $content[] = $this->text(520, $y, $this->qty($sales), 4.9, false);
-                $content[] = $this->text(555, $y, $this->qty($adjusted), 4.9, false);
-                $content[] = $this->text(615, $y, $this->qty($physical), 4.9, false);
-                $content[] = $this->text(660, $y, $this->qty($physical - $adjusted), 4.9, false);
-                $content[] = $this->text(710, $y, $row->warehouse_result === 'MATCH' ? 'COCOK' : 'SELISIH', 4.9, true);
-                $content[] = $this->text(755, $y, $this->short((string) ($row->checker_name ?? '-'), 12), 4.9, false);
+                $content[] = $this->text(62, $y, $this->short((string) $row->cycle_no, 15), 4.9, false);
+                $content[] = $this->text(137, $y, $this->short($row->source_database.' / '.$row->warehouse_code, 23), 4.9, false);
+                $content[] = $this->text(258, $y, $this->short($row->item_code.' '.$row->item_name, 37), 4.9, false);
+                $content[] = $this->text(445, $y, $this->qty($system), 4.9, false);
+                $content[] = $this->text(486, $y, $this->qty($sales), 4.9, false);
+                $content[] = $this->text(522, $y, $this->qty($pendingGt), 4.9, false);
+                $content[] = $this->text(558, $y, $this->qty($validation), 4.9, false);
+                $content[] = $this->text(605, $y, $this->qty($physical), 4.9, false);
+                $content[] = $this->text(650, $y, $this->qty($physical - $validation), 4.9, false);
+                $content[] = $this->text(702, $y, $row->warehouse_result === 'MATCH' ? 'COCOK' : 'SELISIH', 4.9, true);
+                $content[] = $this->text(750, $y, $this->short((string) ($row->checker_name ?? '-'), 11), 4.9, false);
 
                 $comment = trim((string) ($row->checker_comment ?? ''));
                 if ($comment !== '') {

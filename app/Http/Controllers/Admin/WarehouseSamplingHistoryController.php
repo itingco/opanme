@@ -70,6 +70,7 @@ class WarehouseSamplingHistoryController extends Controller
             'Line', 'Kode Item', 'Nama Item', 'UOM',
             'Total Sistem Gabungan', 'Fisik Total Checker',
             'Stok Sistem Gudang', 'Tanggal Sales Invoice', 'Qty Sales Invoice Hari Cek', 'Stok Setelah Sales', 'Nomor Sales Invoice',
+            'Pending Good Transfer', 'Nomor Good Transfer', 'Stok Validasi',
             'Fisik Alokasi Gudang', 'Selisih Gudang', 'Hasil Gudang',
             'Komentar Checker', 'Catatan Validasi',
         ];
@@ -79,6 +80,8 @@ class WarehouseSamplingHistoryController extends Controller
                 $system = (float) ($row->warehouse_system_qty ?? 0);
                 $sales = (float) ($row->sales_invoice_qty ?? 0);
                 $adjusted = (float) ($row->adjusted_system_qty ?? $system);
+                $pendingGt = (float) ($row->pending_transfer_qty ?? 0);
+                $validation = (float) ($row->validation_system_qty ?? ($adjusted + $pendingGt));
                 $physical = (float) ($row->warehouse_physical_qty ?? 0);
                 yield [
                     $this->dateTime($row->closed_at),
@@ -104,8 +107,11 @@ class WarehouseSamplingHistoryController extends Controller
                     $sales,
                     $adjusted,
                     $this->invoiceNumbers($row->sales_invoice_details ?? null),
+                    $pendingGt,
+                    $this->transferNumbers($row->pending_transfer_details ?? null),
+                    $validation,
                     $physical,
-                    round($physical - $adjusted, 4),
+                    round($physical - $validation, 4),
                     $row->warehouse_result === 'MATCH' ? 'COCOK' : ($row->warehouse_result === 'MISMATCH' ? 'SELISIH' : ''),
                     $row->checker_comment,
                     $row->validation_note,
@@ -130,6 +136,20 @@ class WarehouseSamplingHistoryController extends Controller
 
         return collect($details)
             ->map(fn ($row) => trim((string) ($row['invoice_number'] ?? '')))
+            ->filter()
+            ->unique()
+            ->implode(', ');
+    }
+
+
+    private function transferNumbers(mixed $value): string
+    {
+        if ($value === null || $value === '') return '';
+        $details = is_array($value) ? $value : json_decode((string) $value, true);
+        if (! is_array($details)) return '';
+
+        return collect($details)
+            ->map(fn ($row) => trim((string) ($row['mutation_number'] ?? '')))
             ->filter()
             ->unique()
             ->implode(', ');

@@ -94,6 +94,7 @@ class WarehouseSamplingHistoryService
                     ->orWhere('item.checker_comment', $operator, $term)
                     ->orWhere('item.validation_note', $operator, $term)
                     ->orWhere('stock.sales_invoice_details', $operator, $term)
+                    ->orWhere('stock.pending_transfer_details', $operator, $term)
                     ->orWhere('wh.warehouse_code', $operator, $term)
                     ->orWhere('wh.warehouse_name', $operator, $term)
                     ->orWhere('checker.name', $operator, $term)
@@ -132,6 +133,9 @@ class WarehouseSamplingHistoryService
             'stock.sales_invoice_qty',
             'stock.adjusted_system_qty',
             'stock.sales_invoice_details',
+            'stock.pending_transfer_qty',
+            'stock.pending_transfer_details',
+            'stock.validation_system_qty',
             'stock.allocated_physical_qty as warehouse_physical_qty',
             'stock.result as warehouse_result',
         ]);

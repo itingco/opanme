@@ -116,19 +116,25 @@
         @forelse($items as $item)
             @php
                 $salesTotal = 0.0;
-                $adjustedSystemTotal = (float) $item->system_qty;
+                $afterSalesTotal = (float) $item->system_qty;
+                $pendingTransferTotal = 0.0;
+                $validationSystemTotal = (float) $item->system_qty;
 
                 if ($item->validated_at) {
                     $salesTotal = (float) $item->stocks->sum(fn($stock) => (float)($stock->sales_invoice_qty ?? 0));
-                    $adjustedSystemTotal = (float) $item->stocks->sum(fn($stock) => (float)($stock->adjusted_system_qty ?? $stock->system_qty));
+                    $afterSalesTotal = (float) $item->stocks->sum(fn($stock) => (float)($stock->adjusted_system_qty ?? $stock->system_qty));
+                    $pendingTransferTotal = (float) $item->stocks->sum(fn($stock) => (float)($stock->pending_transfer_qty ?? 0));
+                    $validationSystemTotal = (float) $item->stocks->sum(fn($stock) => (float)($stock->validation_system_qty ?? (($stock->adjusted_system_qty ?? $stock->system_qty) + ($stock->pending_transfer_qty ?? 0))));
                 } elseif ($item->checked_at) {
                     $salesTotal = (float) $item->stocks->sum(fn($stock) => (float)(($salesInvoiceAdjustments[$stock->id]['sales_qty'] ?? 0)));
-                    $adjustedSystemTotal = (float) $item->stocks->sum(fn($stock) => (float)(($salesInvoiceAdjustments[$stock->id]['adjusted_system_qty'] ?? $stock->system_qty)));
+                    $afterSalesTotal = (float) $item->stocks->sum(fn($stock) => (float)(($salesInvoiceAdjustments[$stock->id]['adjusted_system_qty'] ?? $stock->system_qty)));
+                    $pendingTransferTotal = (float) $item->stocks->sum(fn($stock) => (float)(($pendingTransferAdjustments[$stock->id]['pending_transfer_qty'] ?? 0)));
+                    $validationSystemTotal = (float) $item->stocks->sum(fn($stock) => (float)(($pendingTransferAdjustments[$stock->id]['validation_system_qty'] ?? ($salesInvoiceAdjustments[$stock->id]['adjusted_system_qty'] ?? $stock->system_qty))));
                 }
 
                 $totalVariance = ($item->checked_at === null || $item->physical_qty === null)
                     ? null
-                    : (float)$item->physical_qty - $adjustedSystemTotal;
+                    : (float)$item->physical_qty - $validationSystemTotal;
             @endphp
             <article class="ws-admin-item-card {{ $item->validated_at ? 'validated' : ($item->checked_at ? 'waiting-validation' : '') }}">
                 <div class="ws-admin-item-head">
@@ -150,8 +156,9 @@
 
                 <div class="ws-total-strip ws-total-strip-sales">
                     <span>Snapshot Sistem<b>{{ number_format((float)$item->system_qty,4,'.',',') }} {{ $item->uom_code }}</b></span>
-                    <span>Sales Invoice Hari Cek<b class="{{ $salesTotal > 0 ? 'negative' : '' }}">{{ $item->checked_at ? number_format($salesTotal,4,'.',',').' '.$item->uom_code : '-' }}</b></span>
-                    <span>Sistem Setelah Sales<b>{{ $item->checked_at ? number_format($adjustedSystemTotal,4,'.',',').' '.$item->uom_code : '-' }}</b></span>
+                    <span>Sales Invoice (-)<b class="{{ $salesTotal > 0 ? 'negative' : '' }}">{{ $item->checked_at ? number_format($salesTotal,4,'.',',').' '.$item->uom_code : '-' }}</b></span>
+                    <span>Pending GT (+)<b class="{{ $pendingTransferTotal > 0 ? 'positive' : '' }}">{{ $item->checked_at ? number_format($pendingTransferTotal,4,'.',',').' '.$item->uom_code : '-' }}</b></span>
+                    <span>Stok Validasi<b>{{ $item->checked_at ? number_format($validationSystemTotal,4,'.',',').' '.$item->uom_code : '-' }}</b></span>
                     <span>Fisik Total Checker<b>{{ ($item->checked_at === null || $item->physical_qty === null) ? '-' : number_format((float)$item->physical_qty,4,'.',',').' '.$item->uom_code }}</b></span>
                     <span>Selisih Total<b class="{{ $totalVariance !== null && $totalVariance < 0 ? 'negative' : ($totalVariance !== null && $totalVariance > 0 ? 'positive' : '') }}">{{ $totalVariance === null ? '-' : number_format($totalVariance,4,'.',',') }}</b></span>
                 </div>
@@ -170,9 +177,12 @@
                                 @foreach($item->stocks as $stock)
                                     @php
                                         $stockSales = (float)($stock->sales_invoice_qty ?? 0);
-                                        $stockAdjusted = (float)($stock->adjusted_system_qty ?? $stock->system_qty);
-                                        $variance=(float)$stock->allocated_physical_qty-$stockAdjusted;
+                                        $stockAfterSales = (float)($stock->adjusted_system_qty ?? $stock->system_qty);
+                                        $stockPendingGt = (float)($stock->pending_transfer_qty ?? 0);
+                                        $stockValidation = (float)($stock->validation_system_qty ?? ($stockAfterSales + $stockPendingGt));
+                                        $variance=(float)$stock->allocated_physical_qty-$stockValidation;
                                         $invoiceDetails = $stock->sales_invoice_details ?? [];
+                                        $pendingTransferDetails = $stock->pending_transfer_details ?? [];
                                     @endphp
                                     <article class="ws-allocation-card {{ $variance<0?'is-short':($variance>0?'is-over':'is-match') }}">
                                         <div class="ws-allocation-card-head">
@@ -183,8 +193,9 @@
                                         <small class="ws-allocation-warehouse-name">{{ $stock->warehouse?->warehouse_name }}</small>
                                         <div class="ws-allocation-card-metrics">
                                             <span>Snapshot Stok<b>{{ number_format((float)$stock->system_qty,4,'.',',') }}</b></span>
-                                            <span>Sales Invoice<b class="{{ $stockSales > 0 ? 'negative' : '' }}">{{ number_format($stockSales,4,'.',',') }}</b></span>
-                                            <span>Stok Setelah Sales<b>{{ number_format($stockAdjusted,4,'.',',') }}</b></span>
+                                            <span>Sales Invoice (-)<b class="{{ $stockSales > 0 ? 'negative' : '' }}">{{ number_format($stockSales,4,'.',',') }}</b></span>
+                                            <span>Pending GT (+)<b class="{{ $stockPendingGt > 0 ? 'positive' : '' }}">{{ number_format($stockPendingGt,4,'.',',') }}</b></span>
+                                            <span>Stok Validasi<b>{{ number_format($stockValidation,4,'.',',') }}</b></span>
                                             <span>Fisik Dialokasikan<b>{{ number_format((float)$stock->allocated_physical_qty,4,'.',',') }}</b></span>
                                             <span>Selisih<b class="{{ $variance<0?'negative':($variance>0?'positive':'') }}">{{ number_format($variance,4,'.',',') }}</b></span>
                                         </div>
@@ -193,6 +204,14 @@
                                                 <strong>Sales Invoice {{ $stock->sales_invoice_date?->format('d/m/Y') }}</strong>
                                                 @foreach($invoiceDetails as $invoice)
                                                     <span>{{ $invoice['invoice_number'] ?? '-' }} <b>{{ number_format((float)($invoice['qty'] ?? 0),4,'.',',') }}</b></span>
+                                                @endforeach
+                                            </div>
+                                        @endif
+                                        @if($stockPendingGt > 0)
+                                            <div class="ws-pending-transfer-list">
+                                                <strong>Good Transfer belum Received</strong>
+                                                @foreach($pendingTransferDetails as $transfer)
+                                                    <span>{{ $transfer['mutation_number'] ?? '-' }} · {{ !empty($transfer['mutation_date']) ? \Carbon\Carbon::parse($transfer['mutation_date'])->format('d/m/Y') : '-' }} · {{ $transfer['source_warehouse_code'] ?? '-' }} → {{ $transfer['destination_warehouse_code'] ?? '-' }} · {{ number_format((float)($transfer['document_qty'] ?? 0),4,'.',',') }} {{ $transfer['uom_code'] ?? '' }} <b>+{{ number_format((float)($transfer['qty_smallest'] ?? 0),4,'.',',') }}</b></span>
                                                 @endforeach
                                             </div>
                                         @endif
@@ -205,18 +224,21 @@
                         <form method="POST" action="{{ route('warehouse.admin.items.validate',[$period,$item]) }}" class="ws-validation-form" data-physical-total="{{ (float)$item->physical_qty }}" data-system-total="{{ (float)$item->system_qty }}">
                             @csrf @method('PUT')
                             <div class="ws-validation-help">
-                                <strong>Validasi Stok Setelah Sales Invoice</strong>
-                                <p>Sistem mengecek Sales Invoice pada tanggal checker untuk item + gudang yang sama. Qty invoice keluar dikurangi dari snapshot stok, lalu Qty fisik checker dibagi proporsional berdasarkan stok setelah pengurangan tersebut.</p>
+                                <strong>Validasi Stok: Sales Invoice + Pending Good Transfer</strong>
+                                <p>Stok validasi dihitung per gudang: <b>Snapshot - Sales Invoice Hari Cek + Good Transfer belum Received</b>. Good Transfer hanya diambil bila gudang yang dicek adalah DestinationWarehouseID. Qty fisik checker lalu dibagi proporsional berdasarkan stok validasi tersebut.</p>
                             </div>
                             <div class="ws-allocation-horizontal-scroll" aria-label="Distribusi fisik proporsional per gudang">
                                 <div class="ws-allocation-horizontal-track">
                                     @foreach($item->stocks as $stock)
                                         @php
                                             $salesInfo = $salesInvoiceAdjustments[$stock->id] ?? ['sales_date' => $item->checked_at?->format('Y-m-d'), 'sales_qty' => 0, 'adjusted_system_qty' => (float)$stock->system_qty, 'invoices' => []];
+                                            $pendingInfo = $pendingTransferAdjustments[$stock->id] ?? ['pending_transfer_qty' => 0, 'validation_system_qty' => (float)($salesInfo['adjusted_system_qty'] ?? $stock->system_qty), 'transfers' => [], 'conversion_warnings' => []];
                                             $stockSales = (float)($salesInfo['sales_qty'] ?? 0);
-                                            $stockAdjusted = (float)($salesInfo['adjusted_system_qty'] ?? $stock->system_qty);
+                                            $stockAfterSales = (float)($salesInfo['adjusted_system_qty'] ?? $stock->system_qty);
+                                            $stockPendingGt = (float)($pendingInfo['pending_transfer_qty'] ?? 0);
+                                            $stockValidation = (float)($pendingInfo['validation_system_qty'] ?? ($stockAfterSales + $stockPendingGt));
                                         @endphp
-                                        <article class="ws-allocation-card" data-stock-row data-system="{{ $stockAdjusted }}" data-can-allocate="{{ $stock->item_id !== null && $stockAdjusted > 0 ? '1' : '0' }}">
+                                        <article class="ws-allocation-card" data-stock-row data-system="{{ $stockValidation }}" data-can-allocate="{{ $stock->item_id !== null && $stockValidation > 0 ? '1' : '0' }}">
                                             <div class="ws-allocation-card-head">
                                                 <span>{{ $stock->warehouse?->source_database }}</span>
                                                 <span class="ws-allocation-card-index">Gudang {{ $loop->iteration }}</span>
@@ -225,8 +247,9 @@
                                             <small class="ws-allocation-warehouse-name">{{ $stock->warehouse?->warehouse_name }}</small>
                                             <div class="ws-allocation-card-metrics">
                                                 <span>Snapshot Stok<b>{{ number_format((float)$stock->system_qty,4,'.',',') }}</b></span>
-                                                <span>Sales Invoice Hari Cek<b class="{{ $stockSales > 0 ? 'negative' : '' }}">{{ number_format($stockSales,4,'.',',') }}</b></span>
-                                                <span>Stok Setelah Sales<b>{{ number_format($stockAdjusted,4,'.',',') }}</b></span>
+                                                <span>Sales Invoice (-)<b class="{{ $stockSales > 0 ? 'negative' : '' }}">{{ number_format($stockSales,4,'.',',') }}</b></span>
+                                                <span>Pending GT (+)<b class="{{ $stockPendingGt > 0 ? 'positive' : '' }}">{{ number_format($stockPendingGt,4,'.',',') }}</b></span>
+                                                <span>Stok Validasi<b>{{ number_format($stockValidation,4,'.',',') }}</b></span>
                                                 <span>Proporsi Stok<b data-proportion>-</b></span>
                                                 <span>Fisik Proporsional<b data-proportional-qty>-</b></span>
                                                 <span>Selisih<b data-row-variance>-</b></span>
@@ -239,14 +262,28 @@
                                                     @endforeach
                                                 </div>
                                             @endif
+                                            @if($stockPendingGt > 0)
+                                                <div class="ws-pending-transfer-list">
+                                                    <strong>Good Transfer belum Received</strong>
+                                                    @foreach(($pendingInfo['transfers'] ?? []) as $transfer)
+                                                        <span>{{ $transfer['mutation_number'] ?? '-' }} · {{ !empty($transfer['mutation_date']) ? \Carbon\Carbon::parse($transfer['mutation_date'])->format('d/m/Y') : '-' }} · {{ $transfer['source_warehouse_code'] ?? '-' }} → {{ $transfer['destination_warehouse_code'] ?? '-' }} · {{ number_format((float)($transfer['document_qty'] ?? 0),4,'.',',') }} {{ $transfer['uom_code'] ?? '' }} <b>+{{ number_format((float)($transfer['qty_smallest'] ?? 0),4,'.',',') }}</b></span>
+                                                    @endforeach
+                                                </div>
+                                            @endif
+                                            @if(!empty($pendingInfo['conversion_warnings']))
+                                                <div class="ws-transfer-warning">
+                                                    @foreach($pendingInfo['conversion_warnings'] as $warning)<span>{{ $warning }}</span>@endforeach
+                                                </div>
+                                            @endif
                                         </article>
                                     @endforeach
                                 </div>
                             </div>
                             <div class="ws-allocation-summary ws-allocation-summary-sales">
                                 <span>Snapshot Sistem <b>{{ number_format((float)$item->system_qty,4,'.',',') }}</b></span>
-                                <span>Sales Invoice <b class="{{ $salesTotal > 0 ? 'negative' : '' }}">{{ number_format($salesTotal,4,'.',',') }}</b></span>
-                                <span>Sistem Setelah Sales <b>{{ number_format($adjustedSystemTotal,4,'.',',') }}</b></span>
+                                <span>Sales Invoice (-) <b class="{{ $salesTotal > 0 ? 'negative' : '' }}">{{ number_format($salesTotal,4,'.',',') }}</b></span>
+                                <span>Pending GT (+) <b class="{{ $pendingTransferTotal > 0 ? 'positive' : '' }}">{{ number_format($pendingTransferTotal,4,'.',',') }}</b></span>
+                                <span>Stok Validasi <b>{{ number_format($validationSystemTotal,4,'.',',') }}</b></span>
                                 <span>Fisik Checker <b>{{ number_format((float)$item->physical_qty,4,'.',',') }}</b></span>
                                 <span>Total Distribusi <b data-allocation-total>0</b></span>
                             </div>

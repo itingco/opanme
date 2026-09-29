@@ -10,7 +10,8 @@ class SampleCycleItemStock extends Model
     protected $fillable = [
         'sample_cycle_item_id', 'sample_cycle_warehouse_id', 'item_id',
         'system_qty', 'sales_invoice_date', 'sales_invoice_qty', 'adjusted_system_qty',
-        'sales_invoice_details', 'allocated_physical_qty', 'result',
+        'sales_invoice_details', 'pending_transfer_qty', 'pending_transfer_details',
+        'validation_system_qty', 'allocated_physical_qty', 'result',
     ];
 
     protected $casts = [
@@ -20,6 +21,9 @@ class SampleCycleItemStock extends Model
         'sales_invoice_qty' => 'decimal:4',
         'adjusted_system_qty' => 'decimal:4',
         'sales_invoice_details' => 'array',
+        'pending_transfer_qty' => 'decimal:4',
+        'pending_transfer_details' => 'array',
+        'validation_system_qty' => 'decimal:4',
         'allocated_physical_qty' => 'decimal:4',
     ];
 

@@ -389,6 +389,10 @@ Route::middleware(['auth', 'role:ADMIN,ADMIN_GERAI'])
         Route::get('/', [SamplingController::class, 'home'])->name('home');
         Route::get('/warehouses', [SamplingController::class, 'warehouses'])->name('warehouses');
         Route::post('/cycles', [SamplingController::class, 'create'])->name('create');
+
+        // Laporan / audit Sampling Gerai Harian. ADMIN_GERAI hanya melihat gudang assignment miliknya.
+        Route::get('/sampling-harian', [SamplingReportController::class, 'index'])->name('sampling.index');
+        Route::get('/sampling-harian/export-pdf', [SamplingReportController::class, 'exportPdf'])->name('sampling.pdf');
     });
 
 
@@ -403,6 +407,8 @@ Route::middleware(['auth', 'role:CHECKER_GERAI,GERAI'])
     ->name('gerai.checker.')
     ->group(function () {
         Route::get('/', [SamplingController::class, 'checkerHome'])->name('home');
+        Route::get('/sampling-harian', [SamplingController::class, 'checkerHome'])->name('daily');
+        Route::post('/sampling-harian/start', [SamplingController::class, 'startDaily'])->name('daily.start');
         Route::get('/cycles/{sampleCycle}/scan', [SamplingController::class, 'scan'])->name('scan');
         Route::post('/cycles/{sampleCycle}/scan-lookup', [SamplingController::class, 'lookup'])->name('lookup');
         Route::post('/cycles/{sampleCycle}/scan-confirm', [SamplingController::class, 'confirm'])->name('confirm');
@@ -417,11 +423,11 @@ Route::middleware(['auth', 'role:CHECKER_GERAI,GERAI'])
 |--------------------------------------------------------------------------
 |
 | Label digabung ke dalam aplikasi Stock Opname.
-| Tetap menggunakan autentikasi/login Stock Opname.
+| Hanya dapat diakses oleh role ADMIN_GUDANG.
 |
 */
 
-Route::middleware('auth')
+Route::middleware(['auth', 'role:ADMIN_GUDANG'])
     ->prefix('label')
     ->name('label.')
     ->group(function () {

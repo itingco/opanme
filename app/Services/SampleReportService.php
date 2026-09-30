@@ -39,7 +39,6 @@ class SampleReportService
             'date_to' => $to,
             'source_database' => $source,
             'erp_warehouse_ids' => $warehouseIds,
-            // Backward compatibility for old links/bookmarks that still expect one warehouse id.
             'erp_warehouse_id' => count($warehouseIds) === 1 ? $warehouseIds[0] : null,
             'user_id' => $request->integer('user_id') ?: null,
             'result' => strtoupper(trim((string) $request->input('result', ''))),
@@ -53,10 +52,26 @@ class SampleReportService
         $start = $filters['date_from'].' 00:00:00';
         $end = $filters['date_to'].' 23:59:59';
         $warehouseIds = $filters['erp_warehouse_ids'] ?? [];
+        $allowedPairs = $filters['allowed_warehouse_pairs'] ?? null;
 
         return SampleCheck::query()
             ->with('user')
             ->whereBetween('scanned_at', [$start, $end])
+            ->when(is_array($allowedPairs), function ($q) use ($allowedPairs) {
+                if ($allowedPairs === []) {
+                    $q->whereRaw('1 = 0');
+                    return;
+                }
+
+                $q->where(function ($scope) use ($allowedPairs) {
+                    foreach ($allowedPairs as $pair) {
+                        $scope->orWhere(function ($one) use ($pair) {
+                            $one->where('source_database', $pair['source_database'])
+                                ->where('erp_warehouse_id', (int) $pair['erp_warehouse_id']);
+                        });
+                    }
+                });
+            })
             ->when($filters['source_database'] !== '', fn ($q) => $q->where('source_database', $filters['source_database']))
             ->when($warehouseIds !== [], fn ($q) => $q->whereIn('erp_warehouse_id', $warehouseIds))
             ->when($filters['user_id'], fn ($q, $id) => $q->where('user_id', $id))
@@ -87,16 +102,24 @@ class SampleReportService
         ];
     }
 
-    /**
-     * Coverage is calculated independently for every selected warehouse.
-     * Each warehouse target is the unique item set with positive Smallest On Hand
-     * on date_to. Result/user/location/search filters intentionally do not affect coverage.
-     */
     public function coverage(array $filters): ?array
     {
         $warehouseIds = $filters['erp_warehouse_ids'] ?? [];
         if ($filters['source_database'] === '' || $warehouseIds === []) {
             return null;
+        }
+
+        $allowedPairs = $filters['allowed_warehouse_pairs'] ?? null;
+        if (is_array($allowedPairs)) {
+            $allowedIds = collect($allowedPairs)
+                ->where('source_database', $filters['source_database'])
+                ->pluck('erp_warehouse_id')
+                ->map(fn ($id) => (int) $id)
+                ->unique();
+            $warehouseIds = collect($warehouseIds)->intersect($allowedIds)->values()->all();
+            if ($warehouseIds === []) {
+                return null;
+            }
         }
 
         $items = [];
@@ -137,18 +160,16 @@ class SampleReportService
             $aggregateCompleted += $entry['completed'];
         }
 
-        $aggregate = [
-            'target' => $aggregateTarget,
-            'completed' => $aggregateCompleted,
-            'remaining' => max(0, $aggregateTarget - $aggregateCompleted),
-            'percentage' => $aggregateTarget === 0
-                ? 100.0
-                : round(($aggregateCompleted / $aggregateTarget) * 100, 2),
-        ];
-
         return [
             'warehouses' => $items,
-            'aggregate' => $aggregate,
+            'aggregate' => [
+                'target' => $aggregateTarget,
+                'completed' => $aggregateCompleted,
+                'remaining' => max(0, $aggregateTarget - $aggregateCompleted),
+                'percentage' => $aggregateTarget === 0
+                    ? 100.0
+                    : round(($aggregateCompleted / $aggregateTarget) * 100, 2),
+            ],
         ];
     }
 }

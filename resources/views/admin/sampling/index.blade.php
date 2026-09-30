@@ -1,7 +1,7 @@
 @extends('layouts.app')
 @section('title','Laporan Sampling')
 @section('content')
-<div class="page-heading"><div><h1>Laporan Sampling Gerai</h1><p>Audit sampling harian dan progres target opname 100% barang berstok dalam periode.</p></div><a class="btn primary" href="{{ route('admin.sampling.pdf', request()->query()) }}">Export PDF</a></div>
+<div class="page-heading"><div><h1>Laporan Sampling Gerai</h1><p>Audit sampling harian dan progres target opname 100% barang berstok dalam periode.</p></div><a class="btn primary" href="{{ route($reportPdfRoute, request()->query()) }}">Export PDF</a></div>
 <section class="panel sampling-filter-panel">
     <div class="sampling-filter-head">
         <div>
@@ -25,7 +25,7 @@
         @endif
     </div>
 
-    <form method="GET" action="{{ route('admin.sampling.index') }}" class="sampling-filter-form" id="sampling-filter-form">
+    <form method="GET" action="{{ route($reportIndexRoute) }}" class="sampling-filter-form" id="sampling-filter-form">
         <div class="sampling-period-group">
             <span class="sampling-group-label">Periode</span>
             <div class="sampling-period-fields">
@@ -109,7 +109,7 @@
         </div>
 
         <div class="sampling-filter-actions">
-            <a class="btn sampling-reset-btn" href="{{ route('admin.sampling.index') }}">Reset</a>
+            <a class="btn sampling-reset-btn" href="{{ route($reportIndexRoute) }}">Reset</a>
             <button class="btn primary sampling-apply-btn" type="submit">Terapkan Filter</button>
         </div>
     </form>
@@ -139,7 +139,7 @@
 document.addEventListener('DOMContentLoaded', () => {
     const source = document.getElementById('report-source');
     const warehouse = document.getElementById('report-warehouse');
-    const warehouseUrl = @json(route('admin.erp.warehouses'));
+    const warehouseUrl = @json(route($warehouseLookupRoute));
 
     function initSearchableSelect(root) {
         if (!root) return null;

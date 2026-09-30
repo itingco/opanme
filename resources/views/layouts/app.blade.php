@@ -31,22 +31,21 @@
             @if($u->isAdmin())
                 <a class="sidebar-link {{ request()->routeIs('admin.dashboard') ? 'active' : '' }}" href="{{ route('admin.dashboard') }}"><span class="sidebar-icon">⌂</span><span class="sidebar-label">Dashboard</span></a>
                 <a class="sidebar-link {{ request()->routeIs('gerai.admin.*') ? 'active' : '' }}" href="{{ route('gerai.admin.home') }}"><span class="sidebar-icon">◎</span><span class="sidebar-label">Admin Gerai</span></a>
-                <a class="sidebar-link {{ request()->routeIs('admin.sampling.*') ? 'active' : '' }}" href="{{ route('admin.sampling.index') }}"><span class="sidebar-icon">≡</span><span class="sidebar-label">Laporan Gerai</span></a>
+                <a class="sidebar-link {{ request()->routeIs('admin.sampling.*') ? 'active' : '' }}" href="{{ route('admin.sampling.index') }}"><span class="sidebar-icon">≡</span><span class="sidebar-label">Sampling Gerai Harian</span></a>
                 <a class="sidebar-link {{ request()->routeIs('warehouse.admin.*') ? 'active' : '' }}" href="{{ route('warehouse.admin.index') }}"><span class="sidebar-icon">▦</span><span class="sidebar-label">Admin Gudang</span></a>
                 <a class="sidebar-link {{ request()->routeIs('warehouse.history.*') ? 'active' : '' }}" href="{{ route('warehouse.history.index') }}"><span class="sidebar-icon">≡</span><span class="sidebar-label">History Gudang</span></a>
                 <a class="sidebar-link {{ request()->routeIs('admin.cycles.*') ? 'active' : '' }}" href="{{ route('admin.cycles.index') }}"><span class="sidebar-icon">◫</span><span class="sidebar-label">Cycle Opname Legacy</span></a>
                 <a class="sidebar-link {{ request()->routeIs('admin.barcodes.*') ? 'active' : '' }}" href="{{ route('admin.barcodes.index') }}"><span class="sidebar-icon">▥</span><span class="sidebar-label">Barcode</span></a>
                 <a class="sidebar-link {{ request()->routeIs('admin.ratios.*') ? 'active' : '' }}" href="{{ route('admin.ratios.index') }}"><span class="sidebar-icon">⇄</span><span class="sidebar-label">Ratio</span></a>
-                <a class="sidebar-link {{ request()->routeIs('label.*') ? 'active' : '' }}" href="{{ route('label.index') }}"><span class="sidebar-icon">▤</span><span class="sidebar-label">Label</span></a>
                 <a class="sidebar-link {{ request()->routeIs('admin.users.*') ? 'active' : '' }}" href="{{ route('admin.users.index') }}"><span class="sidebar-icon">♙</span><span class="sidebar-label">User & Akses</span></a>
             @elseif($u->isAdminGerai())
-                <a class="sidebar-link {{ request()->routeIs('gerai.admin.*') ? 'active' : '' }}" href="{{ route('gerai.admin.home') }}"><span class="sidebar-icon">◎</span><span class="sidebar-label">Sampling Gerai</span></a>
-                <a class="sidebar-link {{ request()->routeIs('label.*') ? 'active' : '' }}" href="{{ route('label.index') }}"><span class="sidebar-icon">▤</span><span class="sidebar-label">Label</span></a>
+                <a class="sidebar-link {{ request()->routeIs('gerai.admin.home') || request()->routeIs('gerai.admin.create') ? 'active' : '' }}" href="{{ route('gerai.admin.home') }}"><span class="sidebar-icon">◎</span><span class="sidebar-label">Sampling Gerai</span></a>
+                <a class="sidebar-link {{ request()->routeIs('gerai.admin.sampling.*') ? 'active' : '' }}" href="{{ route('gerai.admin.sampling.index') }}"><span class="sidebar-icon">≡</span><span class="sidebar-label">Sampling Gerai Harian</span></a>
             @elseif($u->isCheckerGerai() || $u->isLegacyGerai())
-                <a class="sidebar-link {{ request()->routeIs('gerai.checker.*') ? 'active' : '' }}" href="{{ route('gerai.checker.home') }}"><span class="sidebar-icon">✓</span><span class="sidebar-label">Tugas Gerai</span></a>
-                <a class="sidebar-link {{ request()->routeIs('label.*') ? 'active' : '' }}" href="{{ route('label.index') }}"><span class="sidebar-icon">▤</span><span class="sidebar-label">Label</span></a>
+                <a class="sidebar-link {{ request()->routeIs('gerai.checker.*') ? 'active' : '' }}" href="{{ route('gerai.checker.daily') }}"><span class="sidebar-icon">▦</span><span class="sidebar-label">Sampling Opname Harian</span></a>
             @elseif($u->isAdminGudang())
                 <a class="sidebar-link {{ request()->routeIs('warehouse.admin.*') ? 'active' : '' }}" href="{{ route('warehouse.admin.index') }}"><span class="sidebar-icon">▦</span><span class="sidebar-label">Sampling Gudang</span></a>
+                <a class="sidebar-link {{ request()->routeIs('label.*') ? 'active' : '' }}" href="{{ route('label.index') }}"><span class="sidebar-icon">▤</span><span class="sidebar-label">Label</span></a>
                 <a class="sidebar-link {{ request()->routeIs('warehouse.history.*') ? 'active' : '' }}" href="{{ route('warehouse.history.index') }}"><span class="sidebar-icon">≡</span><span class="sidebar-label">History Sampling</span></a>
             @elseif($u->isCheckerGudang())
                 <a class="sidebar-link {{ request()->routeIs('warehouse.checker.*') ? 'active' : '' }}" href="{{ route('warehouse.checker.index') }}"><span class="sidebar-icon">✓</span><span class="sidebar-label">Tugas Sampling</span></a>

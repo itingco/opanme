@@ -1,5 +1,5 @@
 @extends('layouts.app')
-@section('title','Scan Sampling')
+@section('title','Sampling Opname Harian')
 @section('page-class','sampling-scanner-page')
 @section('content')
 @push('styles')
@@ -15,7 +15,7 @@
      data-confirm-url="{{ route('gerai.checker.confirm',$cycle) }}">
 
     <div class="sampling-nav-row">
-        <a class="sampling-back" href="{{ route('gerai.checker.home') }}">← Sampling</a>
+        <a class="sampling-back" href="{{ route('gerai.checker.home') }}">← Sampling Harian</a>
         <span class="sampling-count-inline"><strong id="sample-count">{{ number_format($checkCount) }}</strong> item dicek</span>
     </div>
 

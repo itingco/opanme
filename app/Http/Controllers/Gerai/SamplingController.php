@@ -114,12 +114,19 @@ class SamplingController extends Controller
         );
     }
 
-    /** Checker Gerai: task list across all assigned warehouses/databases. */
+    /**
+     * Checker Gerai: modul sampling harian mandiri.
+     * User dapat memilih salah satu gudang assignment-nya lalu langsung mulai scan.
+     * Cycle yang dibuat Admin Gerai untuk user ini tetap muncul pada daftar yang sama.
+     */
     public function checkerHome(Request $request): View
     {
+        $user = $request->user();
+        $assignments = $this->checkerAssignments($user);
+
         $cycles = SampleCycle::query()
             ->where('cycle_type', SampleCycle::TYPE_GERAI)
-            ->where('assigned_checker_id', $request->user()->id)
+            ->where('assigned_checker_id', $user->id)
             ->whereIn('status', [SampleCycle::STATUS_OPEN, SampleCycle::STATUS_CLOSED])
             ->with(['creator:id,name'])
             ->withCount('checks')
@@ -127,7 +134,44 @@ class SamplingController extends Controller
             ->latest('id')
             ->paginate(20);
 
-        return view('gerai.checker_home', compact('cycles'));
+        return view('gerai.checker_home', compact('cycles', 'assignments', 'user'));
+    }
+
+    /** Checker Gerai memulai sampling harian sendiri pada gudang yang memang di-assign kepadanya. */
+    public function startDaily(Request $request, SampleCycleNumberService $numbers): RedirectResponse
+    {
+        $user = $request->user();
+        abort_unless($user->isGeraiCheckerRole(), 403);
+
+        $data = $request->validate([
+            'warehouse_key' => ['required','string','max:100'],
+            'location' => ['required','string','max:255'],
+        ]);
+
+        $warehouse = $this->resolveCheckerWarehouse($user, $data['warehouse_key']);
+
+        $cycle = DB::transaction(function () use ($user, $data, $warehouse, $numbers): SampleCycle {
+            return SampleCycle::create([
+                'cycle_no' => $numbers->next(now()),
+                'created_by' => $user->id,
+                'source_database' => $warehouse['source_database'],
+                'erp_warehouse_id' => (int) $warehouse['warehouse_id'],
+                'warehouse_code' => $warehouse['warehouse_code'],
+                'warehouse_name' => $warehouse['warehouse_name'],
+                'location' => trim($data['location']),
+                'status' => SampleCycle::STATUS_OPEN,
+                'started_at' => now(),
+                'cycle_type' => SampleCycle::TYPE_GERAI,
+                'assigned_checker_id' => $user->id,
+                'target_percentage' => 100,
+                'notes' => 'Sampling harian mandiri Checker Gerai',
+            ]);
+        });
+
+        return redirect()->route('gerai.checker.scan', $cycle)->with(
+            'success',
+            "{$cycle->cycle_no} dibuat. Silakan mulai scan barcode barang."
+        );
     }
 
     public function scan(Request $request, SampleCycle $sampleCycle): View
@@ -243,6 +287,60 @@ class SamplingController extends Controller
             'warehouse_code' => (string) $warehouse['warehouse_code'],
             'warehouse_name' => (string) $warehouse['warehouse_name'],
         ];
+    }
+
+    /**
+     * @return array<int,array{source_database:string,warehouse_id:int,warehouse_code:string,warehouse_name:string}>
+     */
+    private function checkerAssignments(User $user): array
+    {
+        $rows = $user->warehouseAssignments()
+            ->orderBy('source_database')
+            ->orderBy('warehouse_code')
+            ->get()
+            ->map(fn (UserWarehouseAssignment $assignment): array => [
+                'source_database' => (string) $assignment->source_database,
+                'warehouse_id' => (int) $assignment->erp_warehouse_id,
+                'warehouse_code' => (string) $assignment->warehouse_code,
+                'warehouse_name' => (string) $assignment->warehouse_name,
+            ])
+            ->values()
+            ->all();
+
+        // Backward compatibility untuk akun GERAI lama dengan single binding.
+        if ($rows === [] && $user->source_database && $user->erp_warehouse_id) {
+            $rows[] = [
+                'source_database' => (string) $user->source_database,
+                'warehouse_id' => (int) $user->erp_warehouse_id,
+                'warehouse_code' => (string) ($user->warehouse_code ?? '-'),
+                'warehouse_name' => (string) ($user->warehouse_name ?? '-'),
+            ];
+        }
+
+        return $rows;
+    }
+
+    /** @return array{source_database:string,warehouse_id:int,warehouse_code:string,warehouse_name:string} */
+    private function resolveCheckerWarehouse(User $user, string $key): array
+    {
+        [$source, $warehouseId] = array_pad(explode('|', trim($key), 2), 2, null);
+        $source = strtoupper(trim((string) $source));
+        $warehouseId = (int) $warehouseId;
+
+        if (! in_array($source, [StockOpnameCycle::DB_INGCO, StockOpnameCycle::DB_SMI], true) || $warehouseId <= 0) {
+            throw ValidationException::withMessages(['warehouse_key' => 'Gudang yang dipilih tidak valid.']);
+        }
+
+        $assignment = collect($this->checkerAssignments($user))->first(
+            fn (array $row): bool =>
+                $row['source_database'] === $source && (int) $row['warehouse_id'] === $warehouseId
+        );
+
+        if (! $assignment) {
+            abort(403, 'Checker Gerai tidak memiliki assignment ke gudang tersebut.');
+        }
+
+        return $assignment;
     }
 
     private function assertChecker(Request $request, SampleCycle $cycle): void

@@ -1,10 +1,12 @@
-const BrowserMultiFormatReader = window.ZXingBrowser?.BrowserMultiFormatReader;
+(function () {
+function initSamplingScanner() {
+    const root = document.querySelector('[data-sampling-scanner]');
+    if (!root || root.dataset.samplingScannerInitialized === '1') return;
+    root.dataset.samplingScannerInitialized = '1';
 
-const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
-// Uses the GERAI scan-lookup and scan-confirm endpoints defined in routes/web.php.
-const root = document.querySelector('[data-sampling-scanner]');
-
-if (root) {
+    const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+    const csrf = csrfMeta ? csrfMeta.content : '';
+    // Uses the GERAI scan-lookup and scan-confirm endpoints defined in routes/web.php.
     const lookupUrl = root.dataset.lookupUrl;
     const confirmUrl = root.dataset.confirmUrl;
     const barcodeForm = document.getElementById('sample-barcode-form');
@@ -242,6 +244,12 @@ if (root) {
     qtyInput?.addEventListener('input',()=>{setModalError('');updateDifference();});
     mismatchForm?.addEventListener('submit',e=>{e.preventDefault();confirm('MISMATCH',qtyInput.value)});
 
+    function getBarcodeReaderClass() {
+        return window.ZXingBrowser && window.ZXingBrowser.BrowserMultiFormatReader
+            ? window.ZXingBrowser.BrowserMultiFormatReader
+            : null;
+    }
+
     function cameraErrorMessage(error) {
         const name = error?.name || '';
         if (!window.isSecureContext && !['localhost','127.0.0.1','::1'].includes(location.hostname)) {
@@ -264,11 +272,21 @@ if (root) {
 
     async function startLiveCamera() {
         if (!cameraBtn) return;
+
+        const localHost = ['localhost','127.0.0.1','::1'].includes(location.hostname);
+        if (!window.isSecureContext && !localHost) {
+            showCameraNote('Live camera diblokir browser karena halaman masih HTTP. Kamera foto akan dibuka sebagai fallback. Untuk scanner live, gunakan HTTPS.', 'error');
+            setFeedback('idle','Mode kamera foto','Live camera membutuhkan HTTPS. Kamera foto sedang dibuka.');
+            if (photoInput) photoInput.click();
+            return;
+        }
+
         cameraBtn.disabled = true;
         cameraBtn.textContent = 'Membuka kamera...';
         showCameraNote('Meminta akses kamera belakang...', 'info');
 
-        if (!BrowserMultiFormatReader) {
+        const ReaderClass = getBarcodeReaderClass();
+        if (!ReaderClass) {
             cameraBtn.disabled = false;
             cameraBtn.textContent = 'Coba Kamera Lagi';
             showCameraNote('Library barcode scanner tidak termuat. Refresh halaman (Ctrl+F5) lalu coba lagi.', 'error');
@@ -279,17 +297,16 @@ if (root) {
         if (!navigator.mediaDevices?.getUserMedia) {
             cameraBtn.disabled = false;
             cameraBtn.textContent = 'Coba Kamera Lagi';
-            const message = !window.isSecureContext
-                ? 'Kamera live membutuhkan HTTPS pada HP. Gunakan tombol Ambil Foto Barcode sebagai alternatif.'
-                : 'Browser ini tidak menyediakan akses kamera live.';
+            const message = 'Browser ini tidak menyediakan akses kamera live. Kamera foto akan dibuka sebagai fallback.';
             showCameraNote(message, 'error');
-            setFeedback('error','Kamera live tidak tersedia',message);
+            setFeedback('idle','Mode kamera foto',message);
+            if (photoInput) photoInput.click();
             return;
         }
 
         try {
             cameraControls?.stop?.();
-            const reader = new BrowserMultiFormatReader(undefined, { delayBetweenScanAttempts: 180 });
+            const reader = new ReaderClass(undefined, { delayBetweenScanAttempts: 180 });
             cameraControls = await reader.decodeFromConstraints(
                 { audio:false, video:{ facingMode:{ ideal:'environment' }, width:{ ideal:1280 }, height:{ ideal:720 } } },
                 video,
@@ -314,7 +331,8 @@ if (root) {
     photoInput?.addEventListener('change', async () => {
         const file = photoInput.files?.[0];
         if (!file || busy || validationPending) return;
-        if (!BrowserMultiFormatReader) {
+        const ReaderClass = getBarcodeReaderClass();
+        if (!ReaderClass) {
             showCameraNote('Library barcode scanner tidak termuat. Refresh halaman lalu coba lagi.', 'error');
             photoInput.value = '';
             return;
@@ -325,7 +343,7 @@ if (root) {
         showCameraNote('Membaca barcode dari foto...', 'info');
         const objectUrl = URL.createObjectURL(file);
         try {
-            const reader = new BrowserMultiFormatReader();
+            const reader = new ReaderClass();
             const result = await reader.decodeFromImageUrl(objectUrl);
             const value = result?.getText?.();
             if (!value) throw new Error('Barcode tidak terbaca dari foto.');
@@ -345,6 +363,17 @@ if (root) {
         }
     });
 
+    window.OpnameSamplingScanner = {
+        startCamera: startLiveCamera,
+        openPhoto: function () { if (photoInput) photoInput.click(); },
+        isReady: true
+    };
+
+    if (cameraBtn) cameraBtn.dataset.samplingBound = '1';
+    if (photoBtn) photoBtn.dataset.samplingBound = '1';
+
+    showCameraNote('Scanner siap. Tekan Aktifkan Kamera. Jika browser memblokir kamera live, gunakan Ambil Foto Barcode.', 'info');
+
     const historyDetails = document.querySelector('.sampling-history-details');
     const mobileHistory = window.matchMedia('(max-width: 780px)');
     const syncHistoryDetails = () => {
@@ -357,4 +386,14 @@ if (root) {
 
     window.addEventListener('beforeunload',()=>cameraControls?.stop());
     setTimeout(()=>barcodeInput?.focus({preventScroll:true}),200);
+    root.dataset.samplingScannerReady = '1';
 }
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initSamplingScanner, { once: true });
+} else {
+    initSamplingScanner();
+}
+
+window.addEventListener('load', initSamplingScanner, { once: true });
+})();

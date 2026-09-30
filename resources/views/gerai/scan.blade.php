@@ -3,10 +3,7 @@
 @section('page-class','sampling-scanner-page sampling-mobile-page')
 @section('content')
 @push('styles')
-<link rel="stylesheet" href="{{ asset('assets/css/sampling.css') }}?v=20260930mobile">
-@endpush
-@push('scripts')
-<script src="{{ asset('assets/js/sampling.js') }}?v=20260930mobile"></script>
+<link rel="stylesheet" href="{{ asset('assets/css/sampling.css') }}?v=20260930camera2">
 @endpush
 
 <div class="sampling-shell"
@@ -199,4 +196,26 @@
         </div>
     </details>
 </div>
+
+<script src="{{ asset('assets/vendor/zxing-browser.min.js') }}?v=20260930camera2"></script>
+<script src="{{ asset('assets/js/sampling.js') }}?v=20260930camera2"></script>
+<script>
+window.addEventListener('load', function () {
+    window.setTimeout(function () {
+        var root = document.querySelector('[data-sampling-scanner]');
+        var note = document.getElementById('sample-camera-note');
+        var button = document.getElementById('sample-camera');
+        if (!root || !button) return;
+        if (root.dataset.samplingScannerReady !== '1') {
+            if (note) {
+                note.hidden = false;
+                note.className = 'sampling-camera-note error';
+                note.textContent = 'Script kamera belum aktif. Lakukan refresh penuh halaman. Jika tetap muncul, cek file public/assets/js/sampling.js sudah ter-copy.';
+            }
+            button.textContent = 'Muat Ulang Scanner';
+            button.onclick = function () { window.location.reload(); };
+        }
+    }, 500);
+});
+</script>
 @endsection

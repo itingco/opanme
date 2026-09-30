@@ -1,12 +1,12 @@
 @extends('layouts.app')
 @section('title','Sampling Opname Harian')
-@section('page-class','sampling-scanner-page')
+@section('page-class','sampling-scanner-page sampling-mobile-page')
 @section('content')
 @push('styles')
-<link rel="stylesheet" href="{{ asset('assets/css/sampling.css') }}?v=20260923">
+<link rel="stylesheet" href="{{ asset('assets/css/sampling.css') }}?v=20260930mobile">
 @endpush
 @push('scripts')
-<script src="{{ asset('assets/js/sampling.js') }}?v=20260923"></script>
+<script src="{{ asset('assets/js/sampling.js') }}?v=20260930mobile"></script>
 @endpush
 
 <div class="sampling-shell"
@@ -45,6 +45,12 @@
             <div class="scan-guide"><span></span></div>
             <button class="camera-start" type="button" id="sample-camera">Aktifkan Kamera</button>
         </div>
+
+        <div class="sampling-camera-actions">
+            <button class="btn primary" type="button" id="sample-camera-photo">Ambil Foto Barcode</button>
+            <input type="file" id="sample-camera-photo-input" accept="image/*" capture="environment" hidden>
+        </div>
+        <div class="sampling-camera-note" id="sample-camera-note" hidden></div>
 
         <form id="sample-barcode-form" class="manual-scan sampling-manual-scan">
             <label>
@@ -177,12 +183,12 @@
                     <tbody id="sample-history-body">
                         @forelse($checks as $check)
                             <tr>
-                                <td>{{ $check->scanned_at?->format('d/m H:i:s') }}</td>
-                                <td>{{ $check->location }}</td>
-                                <td><strong>{{ $check->item_code }}</strong><br><small>{{ $check->item_name }}</small></td>
-                                <td class="num">{{ number_format((float)$check->system_qty,4,'.',',') }}</td>
-                                <td class="num">{{ number_format((float)$check->physical_qty,4,'.',',') }}</td>
-                                <td><span class="sample-status {{ strtolower($check->result) }}">{{ $check->result==='MATCH' ? 'Cocok':'Tidak Cocok' }}</span></td>
+                                <td data-label="Waktu">{{ $check->scanned_at?->format('d/m H:i:s') }}</td>
+                                <td data-label="Lokasi / Rak">{{ $check->location }}</td>
+                                <td data-label="Item"><strong>{{ $check->item_code }}</strong><br><small>{{ $check->item_name }}</small></td>
+                                <td data-label="Sistem" class="num">{{ number_format((float)$check->system_qty,4,'.',',') }}</td>
+                                <td data-label="Fisik" class="num">{{ number_format((float)$check->physical_qty,4,'.',',') }}</td>
+                                <td data-label="Hasil"><span class="sample-status {{ strtolower($check->result) }}">{{ $check->result==='MATCH' ? 'Cocok':'Tidak Cocok' }}</span></td>
                             </tr>
                         @empty
                             <tr id="sample-empty-row"><td colspan="6" class="empty">Belum ada item yang disampling.</td></tr>

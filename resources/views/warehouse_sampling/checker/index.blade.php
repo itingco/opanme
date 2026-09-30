@@ -1,8 +1,9 @@
 @extends('layouts.app')
 @section('title','Tugas Sampling Gudang')
+@section('page-class','ws-checker-mobile-page')
 @section('content')
 @push('styles')
-<link rel="stylesheet" href="{{ asset('assets/css/warehouse-sampling.css') }}?v=20260923i">
+<link rel="stylesheet" href="{{ asset('assets/css/warehouse-sampling.css') }}?v=20260930mobile">
 @endpush
 <div class="page-heading">
     <div>

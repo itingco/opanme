@@ -1,6 +1,10 @@
 @extends('layouts.app')
 @section('title','Sampling Opname Harian')
+@section('page-class','sampling-gerai-home sampling-mobile-page')
 @section('content')
+@push('styles')
+<link rel="stylesheet" href="{{ asset('assets/css/sampling.css') }}?v=20260930mobile">
+@endpush
 <div class="page-heading">
     <div>
         <h1>Sampling Opname Harian</h1>
@@ -63,19 +67,19 @@
                 <tbody>
                 @forelse($cycles as $cycle)
                     <tr>
-                        <td>
+                        <td data-label="Cycle">
                             <strong>{{ $cycle->cycle_no }}</strong>
                             <small>{{ (int)$cycle->created_by === (int)$user->id ? 'Dibuat sendiri' : 'Ditugaskan Admin' }}</small>
                         </td>
-                        <td>
+                        <td data-label="Database / Gudang">
                             <strong>{{ $cycle->source_database }} · {{ $cycle->warehouse_code }}</strong>
                             <small>{{ $cycle->warehouse_name }}</small>
                         </td>
-                        <td>{{ $cycle->location }}</td>
-                        <td>{{ $cycle->started_at?->format('d/m/Y H:i') }}</td>
-                        <td><span class="status {{ strtolower($cycle->status) }}">{{ $cycle->status }}</span></td>
-                        <td class="num">{{ number_format($cycle->checks_count) }}</td>
-                        <td>
+                        <td data-label="Lokasi">{{ $cycle->location }}</td>
+                        <td data-label="Mulai">{{ $cycle->started_at?->format('d/m/Y H:i') }}</td>
+                        <td data-label="Status"><span class="status {{ strtolower($cycle->status) }}">{{ $cycle->status }}</span></td>
+                        <td data-label="Item" class="num">{{ number_format($cycle->checks_count) }}</td>
+                        <td data-label="Aksi">
                             @if($cycle->isOpen())
                                 <a class="btn small primary" href="{{ route('gerai.checker.scan',$cycle) }}">Scan / Lanjut</a>
                             @else

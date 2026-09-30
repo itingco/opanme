@@ -24,6 +24,11 @@ if (root) {
     const mismatchSystemQty = document.getElementById('sample-mismatch-system-qty');
     const transitStockBox = document.getElementById('sample-transit-stock');
     const transitStockList = document.getElementById('sample-transit-stock-list');
+    const cameraBtn = document.getElementById('sample-camera');
+    const photoBtn = document.getElementById('sample-camera-photo');
+    const photoInput = document.getElementById('sample-camera-photo-input');
+    const cameraNote = document.getElementById('sample-camera-note');
+    const video = document.getElementById('sample-video');
     let active = null;
     let busy = false;
     let validationPending = false;
@@ -213,7 +218,7 @@ if (root) {
             document.getElementById('sample-count').textContent=Number(d.count).toLocaleString('id-ID');
             document.getElementById('sample-empty-row')?.remove();
             const tr=document.createElement('tr');
-            tr.innerHTML=`<td>${d.scanned_at}</td><td>${escapeHtml(d.location)}</td><td><strong>${escapeHtml(d.item_code)}</strong><br><small>${escapeHtml(d.item_name)}</small></td><td class="num">${fmt(d.system_qty)}</td><td class="num">${fmt(d.physical_qty)}</td><td><span class="sample-status ${d.result.toLowerCase()}">${d.result==='MATCH'?'Cocok':'Tidak Cocok'}</span></td>`;
+            tr.innerHTML=`<td data-label="Waktu">${d.scanned_at}</td><td data-label="Lokasi / Rak">${escapeHtml(d.location)}</td><td data-label="Item"><strong>${escapeHtml(d.item_code)}</strong><br><small>${escapeHtml(d.item_name)}</small></td><td data-label="Sistem" class="num">${fmt(d.system_qty)}</td><td data-label="Fisik" class="num">${fmt(d.physical_qty)}</td><td data-label="Hasil"><span class="sample-status ${d.result.toLowerCase()}">${d.result==='MATCH'?'Cocok':'Tidak Cocok'}</span></td>`;
             document.getElementById('sample-history-body').prepend(tr);
             resetScan();
         } catch(e) {
@@ -237,13 +242,107 @@ if (root) {
     qtyInput?.addEventListener('input',()=>{setModalError('');updateDifference();});
     mismatchForm?.addEventListener('submit',e=>{e.preventDefault();confirm('MISMATCH',qtyInput.value)});
 
-    document.getElementById('sample-camera')?.addEventListener('click', async e => {
-        const btn=e.currentTarget; btn.disabled=true; btn.textContent='Membuka kamera...';
+    function cameraErrorMessage(error) {
+        const name = error?.name || '';
+        if (!window.isSecureContext && !['localhost','127.0.0.1','::1'].includes(location.hostname)) {
+            return 'Kamera live diblokir browser karena halaman dibuka melalui HTTP. Gunakan HTTPS, atau tombol Ambil Foto Barcode.';
+        }
+        if (name === 'NotAllowedError' || name === 'PermissionDeniedError') return 'Izin kamera ditolak. Aktifkan permission Camera untuk browser lalu coba lagi.';
+        if (name === 'NotFoundError' || name === 'DevicesNotFoundError') return 'Kamera tidak ditemukan pada perangkat ini.';
+        if (name === 'NotReadableError' || name === 'TrackStartError') return 'Kamera sedang dipakai aplikasi lain atau tidak dapat dibuka.';
+        if (name === 'OverconstrainedError') return 'Kamera tersedia, tetapi konfigurasi kamera belakang tidak didukung.';
+        if (name === 'SecurityError') return 'Browser memblokir akses kamera untuk halaman ini. Gunakan HTTPS.';
+        return error?.message || 'Kamera tidak dapat dibuka. Gunakan Ambil Foto Barcode atau input manual.';
+    }
+
+    function showCameraNote(message, kind='info') {
+        if (!cameraNote) return;
+        cameraNote.textContent = message;
+        cameraNote.className = `sampling-camera-note ${kind}`;
+        cameraNote.hidden = !message;
+    }
+
+    async function startLiveCamera() {
+        if (!cameraBtn) return;
+        cameraBtn.disabled = true;
+        cameraBtn.textContent = 'Membuka kamera...';
+        showCameraNote('Meminta akses kamera belakang...', 'info');
+
+        if (!BrowserMultiFormatReader) {
+            cameraBtn.disabled = false;
+            cameraBtn.textContent = 'Coba Kamera Lagi';
+            showCameraNote('Library barcode scanner tidak termuat. Refresh halaman (Ctrl+F5) lalu coba lagi.', 'error');
+            setFeedback('error','Scanner tidak termuat','Refresh halaman lalu coba kembali.');
+            return;
+        }
+
+        if (!navigator.mediaDevices?.getUserMedia) {
+            cameraBtn.disabled = false;
+            cameraBtn.textContent = 'Coba Kamera Lagi';
+            const message = !window.isSecureContext
+                ? 'Kamera live membutuhkan HTTPS pada HP. Gunakan tombol Ambil Foto Barcode sebagai alternatif.'
+                : 'Browser ini tidak menyediakan akses kamera live.';
+            showCameraNote(message, 'error');
+            setFeedback('error','Kamera live tidak tersedia',message);
+            return;
+        }
+
         try {
-            const reader=new BrowserMultiFormatReader(undefined,{delayBetweenScanAttempts:160});
-            cameraControls=await reader.decodeFromConstraints({audio:false,video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}}},document.getElementById('sample-video'),r=>{if(r) lookup(r.getText())});
-            btn.style.display='none'; setFeedback('idle','Kamera aktif','Arahkan barcode ke kamera.');
-        } catch(_) {btn.disabled=false;btn.textContent='Coba Kamera Lagi';setFeedback('error','Kamera tidak tersedia','Gunakan scanner USB atau input barcode manual.');}
+            cameraControls?.stop?.();
+            const reader = new BrowserMultiFormatReader(undefined, { delayBetweenScanAttempts: 180 });
+            cameraControls = await reader.decodeFromConstraints(
+                { audio:false, video:{ facingMode:{ ideal:'environment' }, width:{ ideal:1280 }, height:{ ideal:720 } } },
+                video,
+                result => { if (result && !validationPending) lookup(result.getText()); }
+            );
+            cameraBtn.hidden = true;
+            cameraBtn.style.display = 'none';
+            showCameraNote('Kamera aktif. Arahkan barcode ke area kotak scan.', 'success');
+            setFeedback('idle','Kamera aktif','Arahkan barcode ke kamera.');
+        } catch(error) {
+            cameraBtn.disabled = false;
+            cameraBtn.textContent = 'Coba Kamera Lagi';
+            const message = cameraErrorMessage(error);
+            showCameraNote(message, 'error');
+            setFeedback('error','Kamera tidak tersedia',message);
+        }
+    }
+
+    cameraBtn?.addEventListener('click', startLiveCamera);
+
+    photoBtn?.addEventListener('click', () => photoInput?.click());
+    photoInput?.addEventListener('change', async () => {
+        const file = photoInput.files?.[0];
+        if (!file || busy || validationPending) return;
+        if (!BrowserMultiFormatReader) {
+            showCameraNote('Library barcode scanner tidak termuat. Refresh halaman lalu coba lagi.', 'error');
+            photoInput.value = '';
+            return;
+        }
+        photoBtn.disabled = true;
+        const oldText = photoBtn.textContent;
+        photoBtn.textContent = 'Membaca foto...';
+        showCameraNote('Membaca barcode dari foto...', 'info');
+        const objectUrl = URL.createObjectURL(file);
+        try {
+            const reader = new BrowserMultiFormatReader();
+            const result = await reader.decodeFromImageUrl(objectUrl);
+            const value = result?.getText?.();
+            if (!value) throw new Error('Barcode tidak terbaca dari foto.');
+            showCameraNote(`Barcode ditemukan: ${value}`, 'success');
+            await lookup(value);
+        } catch(error) {
+            const message = error?.message?.includes('No MultiFormat Readers') || error?.name === 'NotFoundException'
+                ? 'Barcode tidak terbaca. Ambil foto lebih dekat, terang, dan fokus pada barcode.'
+                : (error?.message || 'Barcode tidak terbaca dari foto.');
+            showCameraNote(message, 'error');
+            setFeedback('error','Barcode foto tidak terbaca',message);
+        } finally {
+            URL.revokeObjectURL(objectUrl);
+            photoInput.value = '';
+            photoBtn.disabled = false;
+            photoBtn.textContent = oldText || 'Ambil Foto Barcode';
+        }
     });
 
     const historyDetails = document.querySelector('.sampling-history-details');

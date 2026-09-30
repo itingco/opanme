@@ -1,8 +1,9 @@
 @extends('layouts.app')
 @section('title','Cek Qty Fisik Total')
+@section('page-class','ws-checker-mobile-page')
 @section('content')
 @push('styles')
-<link rel="stylesheet" href="{{ asset('assets/css/warehouse-sampling.css') }}?v=20260924a">
+<link rel="stylesheet" href="{{ asset('assets/css/warehouse-sampling.css') }}?v=20260930mobile">
 @endpush
 @php
     $total = (int) $period->items_count;
@@ -65,8 +66,8 @@
             @forelse($items as $item)
                 @php($hasDraft = $item->physical_qty !== null)
                 <tr class="{{ $finalized ? 'is-final' : ($hasDraft ? 'is-draft' : '') }}">
-                    <td><strong>#{{ $item->line_no }}</strong></td>
-                    <td>
+                    <td data-label="No"><strong>#{{ $item->line_no }}</strong></td>
+                    <td data-label="Kode Item">
                         @if($editable)
                             <button type="button" class="ws-item-code-button"
                                 data-open-item-modal
@@ -81,11 +82,11 @@
                             <strong>{{ $item->item_code }}</strong>
                         @endif
                     </td>
-                    <td><strong>{{ $item->item_name }}</strong><small>{{ $item->stocks_count }} gudang terkait</small></td>
-                    <td><span class="ws-uom-pill">{{ $item->uom_code }}</span></td>
-                    <td class="num"><strong>{{ $hasDraft ? number_format((float)$item->physical_qty,4,'.',',') : '-' }}</strong></td>
-                    <td><div class="ws-table-comment-preview">{{ filled($item->checker_comment) ? $item->checker_comment : '-' }}</div></td>
-                    <td>
+                    <td data-label="Nama Item"><strong>{{ $item->item_name }}</strong><small>{{ $item->stocks_count }} gudang terkait</small></td>
+                    <td data-label="UOM"><span class="ws-uom-pill">{{ $item->uom_code }}</span></td>
+                    <td data-label="Qty Fisik Draft" class="num"><strong>{{ $hasDraft ? number_format((float)$item->physical_qty,4,'.',',') : '-' }}</strong></td>
+                    <td data-label="Komentar"><div class="ws-table-comment-preview">{{ filled($item->checker_comment) ? $item->checker_comment : '-' }}</div></td>
+                    <td data-label="Status">
                         @if($finalized)<span class="ws-badge open">FINAL</span>
                         @elseif($hasDraft)<span class="ws-badge draft">DRAFT</span>
                         @else<span class="ws-badge">BELUM</span>@endif

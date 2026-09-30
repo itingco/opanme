@@ -892,3 +892,61 @@
 .ws-pending-transfer-list>span b{white-space:nowrap;color:#067647}
 .ws-transfer-warning{margin-top:8px;border:1px solid #f5c2a5;background:#fff8f2;color:#9a3412;border-radius:9px;padding:8px 9px;display:grid;gap:4px;font-size:10px;line-height:1.35}
 .ws-history-table-full{min-width:2920px}
+
+/* 2026-09-30 - Mobile friendly Sampling Gudang */
+@media(max-width:720px){
+  .page-wrap.ws-checker-mobile-page{width:calc(100% - 16px);margin:10px auto 30px}
+  .ws-checker-mobile-page .page-heading{display:grid;grid-template-columns:1fr;gap:10px;margin-bottom:14px}
+  .ws-checker-mobile-page .page-heading h1{font-size:22px;word-break:break-word}
+  .ws-checker-mobile-page .page-heading p{font-size:12px;line-height:1.45}
+  .ws-checker-mobile-page .page-heading>.btn{width:100%}
+  .ws-checker-mobile-page .panel{padding:13px;border-radius:14px}
+  .ws-checker-mobile-page .panel-head{display:grid;grid-template-columns:1fr;gap:10px;align-items:start}
+  .ws-checker-mobile-page .panel-head form,.ws-checker-mobile-page .panel-head .btn{width:100%}
+  .ws-checker-mobile-page .panel-head button{width:100%;min-height:46px}
+  .ws-checker-warehouse-list{display:flex!important;overflow-x:auto;flex-wrap:nowrap!important;padding-bottom:5px;scroll-snap-type:x proximity}
+  .ws-checker-warehouse-list span{display:grid!important;flex:0 0 auto;min-width:180px;max-width:240px;scroll-snap-align:start;white-space:normal}
+  .ws-checker-progress-meta{gap:8px}
+  .ws-lock-note,.ws-final-lock-note{font-size:12px;line-height:1.5;padding:11px 12px}
+
+  .ws-modal-check-table-wrap{max-height:none!important;overflow:visible!important;border:0!important}
+  .ws-check-input-table{min-width:0!important;width:100%!important;display:block}
+  .ws-check-input-table thead{display:none!important}
+  .ws-check-input-table tbody{display:grid;gap:10px}
+  .ws-check-input-table tr{display:grid!important;background:#fff;border:1px solid #e4e9f1;border-radius:13px;padding:10px 11px;box-shadow:0 3px 12px rgba(16,24,40,.035)}
+  .ws-check-input-table tr.is-draft{border-left:4px solid #f79009}.ws-check-input-table tr.is-final{border-left:4px solid #12b76a}
+  .ws-check-input-table td{display:flex!important;align-items:flex-start;justify-content:space-between;gap:12px;padding:6px 0!important;border:0!important;text-align:right!important;white-space:normal!important;min-width:0}
+  .ws-check-input-table td:before{content:attr(data-label);flex:0 0 105px;font-size:10px;line-height:1.3;text-transform:uppercase;letter-spacing:.04em;color:#98a2b3;font-weight:850;text-align:left}
+  .ws-check-input-table td[data-label="Nama Item"] strong{max-width:210px;line-height:1.35;word-break:break-word}
+  .ws-check-input-table td[data-label="Nama Item"] small{max-width:210px}
+  .ws-check-input-table .ws-item-code-button{font-size:15px;line-height:1.3;text-align:right;word-break:break-all}
+  .ws-check-input-table .ws-table-comment-preview{max-width:210px;text-align:right}
+  .ws-check-input-table td.num{text-align:right!important}
+  .ws-modal-table-footer{background:#f8fafc;border-radius:11px;padding:10px 11px}
+
+  .ws-item-entry-modal{align-items:end!important;padding:0!important;z-index:2300!important}
+  .ws-item-entry-backdrop{background:rgba(16,24,40,.64)}
+  .ws-item-entry-dialog{width:100%!important;max-width:none!important;max-height:92dvh!important;border-radius:22px 22px 0 0!important;border-bottom:0!important;padding:15px 14px calc(15px + env(safe-area-inset-bottom))!important}
+  .ws-item-entry-dialog:before{content:"";display:block;width:42px;height:4px;border-radius:999px;background:#d0d5dd;margin:0 auto 10px}
+  .ws-item-entry-dialog>header{position:sticky;top:-15px;z-index:3;background:#fff;padding:10px 0 12px;margin-bottom:13px}
+  .ws-item-entry-dialog h2{font-size:20px!important;word-break:break-all}
+  .ws-item-entry-dialog p{font-size:12px;line-height:1.35;word-break:break-word}
+  .ws-item-entry-close{width:42px;height:42px;flex:0 0 42px}
+  .ws-item-entry-dialog input,.ws-item-entry-dialog textarea{font-size:16px;min-height:52px}
+  .ws-item-entry-dialog textarea{min-height:100px}
+  .ws-item-entry-actions{display:grid!important;grid-template-columns:1fr!important;gap:8px!important}
+  .ws-item-entry-actions .btn{width:100%;min-height:48px}
+
+  .ws-period-card{padding:13px}
+  .ws-period-head{display:grid;grid-template-columns:1fr auto;gap:8px}
+  .ws-period-head strong{word-break:break-word}
+  .ws-period-meta{grid-template-columns:repeat(3,1fr);gap:5px}
+  .ws-period-meta span{padding:8px 5px;font-size:10px}.ws-period-meta b{font-size:15px}
+  .ws-period-card>.btn{width:100%;margin-top:10px;min-height:46px}
+
+  /* Admin Sampling Gudang: keep horizontal business data usable on phones. */
+  .ws-selected-warehouses{grid-template-columns:1fr!important}
+  .ws-warehouse-database-grid{grid-template-columns:1fr!important}
+  .ws-validation-scroll,.ws-validation-cards-scroll,.ws-stock-allocation-scroll{overflow-x:auto!important;-webkit-overflow-scrolling:touch;scroll-snap-type:x proximity}
+  .ws-validation-card,.ws-stock-allocation-card{scroll-snap-align:start}
+}

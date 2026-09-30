@@ -1,8 +1,9 @@
-app/Http/Controllers/Gerai/SamplingController.php
-app/Models/User.php
-app/Services/SampleCheckingService.php
-resources/views/gerai/checker_home.blade.php
+public/assets/js/sampling.js
+public/assets/css/sampling.css
+public/assets/css/warehouse-sampling.css
+public/assets/vendor/zxing-browser.min.js
 resources/views/gerai/scan.blade.php
-resources/views/layouts/app.blade.php
-routes/web.php
-README_FIX_SAMPLING_GERAI_OPERASIONAL.txt
+resources/views/gerai/checker_home.blade.php
+resources/views/warehouse_sampling/checker/index.blade.php
+resources/views/warehouse_sampling/checker/show.blade.php
+README_UPDATE_MOBILE_CAMERA.txt

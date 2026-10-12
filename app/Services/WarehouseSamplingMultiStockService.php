@@ -18,7 +18,8 @@ class WarehouseSamplingMultiStockService
      *
      * IMPORTANT:
      * - Every selected warehouse is read independently.
-     * - Items are merged only after each warehouse snapshot has been collected.
+     * - ItemCode is the unique key across AS_INGCO / AS_SMI and all selected warehouses.
+     * - The first smallest-UOM/name found is used as the display representative.
      * - warehouse_stats makes it visible to the UI that stock from all selected
      *   warehouses has actually been loaded.
      *
@@ -69,7 +70,7 @@ class WarehouseSamplingMultiStockService
                     }
 
                     $uomCode = trim((string) ($item['uom_code'] ?? 'PCS')) ?: 'PCS';
-                    $key = $this->key($itemCode, $uomCode);
+                    $key = $this->key($itemCode);
                     $current = $groups->get($key, [
                         'key' => $key,
                         'item_code' => $itemCode,
@@ -80,6 +81,8 @@ class WarehouseSamplingMultiStockService
                         'warehouses' => [],
                     ]);
 
+                    // Keep one visible ItemCode even if AS_INGCO / AS_SMI use a different ItemID.
+                    // Quantity is already smallest_on_hand, so the cross-database stock can be summed.
                     $qty = round((float) ($row['smallest_on_hand'] ?? 0), 4);
                     $current['total_system_qty'] += $qty;
                     $current['warehouse_count']++;
@@ -89,6 +92,7 @@ class WarehouseSamplingMultiStockService
                         'warehouse_code' => (string) $warehouse->warehouse_code,
                         'warehouse_name' => (string) $warehouse->warehouse_name,
                         'item_id' => $itemId,
+                        'uom_code' => $uomCode,
                         'system_qty' => $qty,
                     ];
                     $groups->put($key, $current);
@@ -108,7 +112,8 @@ class WarehouseSamplingMultiStockService
 
     /**
      * Aggregate items with positive stock from every database/warehouse attached to the period.
-     * The same ItemCode + smallest UOM is presented once to Admin Gudang.
+     * The same ItemCode is presented once to Admin Gudang, even if its ERP ItemID differs
+     * between AS_INGCO and AS_SMI.
      */
     public function availableItems(SampleCycle $cycle): Collection
     {
@@ -118,7 +123,7 @@ class WarehouseSamplingMultiStockService
     /**
      * Build one item line plus a stock snapshot for EVERY selected warehouse.
      * Warehouses where the item exists but has no stock are included with system_qty = 0,
-     * allowing Admin Gudang to allocate checker total to that warehouse during validation.
+     * allowing Admin Gudang to adjust the allocation during validation.
      */
     public function materialize(SampleCycle $cycle, array $selectedKeys): array
     {
@@ -145,7 +150,7 @@ class WarehouseSamplingMultiStockService
         $catalogByDatabase = [];
         foreach ($cycle->warehouses->groupBy('source_database') as $sourceDatabase => $warehouses) {
             $catalogByDatabase[$sourceDatabase] = collect($this->catalog->findItemsByCodes((string) $sourceDatabase, $codes))
-                ->keyBy(fn (array $row): string => $this->key($row['item_code'], $row['uom_code']));
+                ->keyBy(fn (array $row): string => $this->key($row['item_code']));
         }
 
         $snapshots = [];
@@ -205,8 +210,8 @@ class WarehouseSamplingMultiStockService
         return $result;
     }
 
-    private function key(string $itemCode, string $uomCode): string
+    private function key(string $itemCode): string
     {
-        return mb_strtoupper(trim($itemCode)).'|'.mb_strtoupper(trim($uomCode));
+        return mb_strtoupper(trim($itemCode));
     }
 }

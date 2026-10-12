@@ -2,7 +2,21 @@
 @section('title','Kelola Sampling Gudang')
 @section('content')
 @push('styles')
-<link rel="stylesheet" href="{{ asset('assets/css/warehouse-sampling.css') }}?v=20260923j">
+<link rel="stylesheet" href="{{ asset('assets/css/warehouse-sampling.css') }}?v=20261012integerallocation">
+<style>
+    .ws-allocation-card.is-short{background:#fff4f3!important;border-color:#fda29b!important;border-top:4px solid #d92d20!important}
+    .ws-allocation-card.is-over{background:#eff8ff!important;border-color:#84caff!important;border-top:4px solid #1570ef!important}
+    .ws-allocation-card.is-match{background:#f6fef9!important;border-color:#75e0a7!important;border-top:4px solid #079455!important}
+    .ws-variance-edit{display:grid;gap:6px;margin-top:10px;padding:9px;border-radius:9px;background:#fff;border:1px solid #d0d5dd}
+    .ws-variance-edit span{font-size:10px;font-weight:800;color:#344054}
+    .ws-variance-edit input{width:100%;min-height:38px;border:1px solid #cfd6e2;border-radius:8px;padding:7px 9px;text-align:right;font-variant-numeric:tabular-nums}
+    .ws-variance-edit small{font-size:9px;line-height:1.35;color:#667085}
+    .ws-allocation-card.is-short .ws-variance-edit{border-color:#fda29b}
+    .ws-allocation-card.is-over .ws-variance-edit{border-color:#84caff}
+    .ws-allocation-card.is-match .ws-variance-edit{border-color:#75e0a7}
+    .ws-allocation-total-warning{display:block;margin-top:8px;font-size:11px;font-weight:800;color:#b42318}
+    .ws-allocation-total-warning.ok{color:#067647}
+</style>
 @endpush
 
 @php
@@ -12,6 +26,16 @@
     $pct = $total > 0 ? min(100, ($checked / $total) * 100) : 0;
     $targetCount = $total > 0 ? (int) ceil($total * ((float)$period->target_percentage / 100)) : 0;
     $reached = $targetCount > 0 && $checked >= $targetCount;
+
+    $fmtQty = static function ($value): string {
+        $number = round((float)($value ?? 0), 4);
+        if (abs($number) < 0.0001) {
+            $number = 0.0;
+        }
+        $formatted = number_format($number, 4, '.', ',');
+        $formatted = rtrim(rtrim($formatted, '0'), '.');
+        return $formatted === '-0' ? '0' : $formatted;
+    };
 @endphp
 
 <div class="page-heading">
@@ -67,7 +91,7 @@
     <div class="panel-head">
         <div>
             <h2>Pilih Item dari Stok Gabungan</h2>
-            <small class="ws-note">Item yang sama dari seluruh database/gudang periode digabung menjadi satu baris. Total stok adalah penjumlahan stok seluruh gudang. Detail gudang tetap disimpan sebagai snapshot untuk proses validasi.</small>
+            <small class="ws-note">ItemCode yang sama dari AS_INGCO dan AS_SMI hanya tampil satu kali. Total stok adalah penjumlahan seluruh gudang terpilih; ItemID masing-masing database tetap disimpan pada snapshot gudang.</small>
         </div>
     </div>
 
@@ -97,16 +121,15 @@
 </section>
 @endif
 
-
 <section class="panel">
     <div class="panel-head">
         <div>
             <h2>{{ $period->isDraft() ? 'Item yang Sudah Dipilih' : 'Hasil Checker & Validasi Admin Gudang' }}</h2>
             <small class="ws-note">
                 @if($period->isDraft())
-                    Setiap item yang dipilih mewakili stok gabungan seluruh gudang periode. Snapshot per gudang disimpan di belakang untuk validasi.
+                    Setiap ItemCode hanya satu baris walaupun terdapat di dua database. Snapshot per gudang tetap terpisah untuk validasi.
                 @else
-                    Checker hanya mengisi Qty Fisik Total gabungan. Saat validasi, sistem membagi Qty Fisik tersebut secara proporsional ke setiap gudang berdasarkan snapshot stok sistem.
+                    Checker mengisi Qty Fisik Total gabungan. Sistem membagi proporsional dalam bilangan bulat; Admin dapat mengedit Qty Selisih per gudang sebelum menyimpan validasi.
                 @endif
             </small>
         </div>
@@ -155,12 +178,12 @@
                 </div>
 
                 <div class="ws-total-strip ws-total-strip-sales">
-                    <span>Snapshot Sistem<b>{{ number_format((float)$item->system_qty,4,'.',',') }} {{ $item->uom_code }}</b></span>
-                    <span>Sales Invoice (-)<b class="{{ $salesTotal > 0 ? 'negative' : '' }}">{{ $item->checked_at ? number_format($salesTotal,4,'.',',').' '.$item->uom_code : '-' }}</b></span>
-                    <span>Pending GT (+)<b class="{{ $pendingTransferTotal > 0 ? 'positive' : '' }}">{{ $item->checked_at ? number_format($pendingTransferTotal,4,'.',',').' '.$item->uom_code : '-' }}</b></span>
-                    <span>Stok Validasi<b>{{ $item->checked_at ? number_format($validationSystemTotal,4,'.',',').' '.$item->uom_code : '-' }}</b></span>
-                    <span>Fisik Total Checker<b>{{ ($item->checked_at === null || $item->physical_qty === null) ? '-' : number_format((float)$item->physical_qty,4,'.',',').' '.$item->uom_code }}</b></span>
-                    <span>Selisih Total<b class="{{ $totalVariance !== null && $totalVariance < 0 ? 'negative' : ($totalVariance !== null && $totalVariance > 0 ? 'positive' : '') }}">{{ $totalVariance === null ? '-' : number_format($totalVariance,4,'.',',') }}</b></span>
+                    <span>Snapshot Sistem<b>{{ $fmtQty($item->system_qty) }} {{ $item->uom_code }}</b></span>
+                    <span>Sales Invoice (-)<b class="{{ $salesTotal > 0 ? 'negative' : '' }}">{{ $item->checked_at ? $fmtQty($salesTotal).' '.$item->uom_code : '-' }}</b></span>
+                    <span>Pending GT (+)<b class="{{ $pendingTransferTotal > 0 ? 'positive' : '' }}">{{ $item->checked_at ? $fmtQty($pendingTransferTotal).' '.$item->uom_code : '-' }}</b></span>
+                    <span>Stok Validasi<b>{{ $item->checked_at ? $fmtQty($validationSystemTotal).' '.$item->uom_code : '-' }}</b></span>
+                    <span>Fisik Total Checker<b>{{ ($item->checked_at === null || $item->physical_qty === null) ? '-' : $fmtQty($item->physical_qty).' '.$item->uom_code }}</b></span>
+                    <span>Selisih Total<b class="{{ $totalVariance !== null && $totalVariance < 0 ? 'negative' : ($totalVariance !== null && $totalVariance > 0 ? 'positive' : '') }}">{{ $totalVariance === null ? '-' : $fmtQty($totalVariance) }}</b></span>
                 </div>
 
                 @if($item->checked_at && filled($item->checker_comment))
@@ -184,7 +207,7 @@
                                         $invoiceDetails = $stock->sales_invoice_details ?? [];
                                         $pendingTransferDetails = $stock->pending_transfer_details ?? [];
                                     @endphp
-                                    <article class="ws-allocation-card {{ $variance<0?'is-short':($variance>0?'is-over':'is-match') }}">
+                                    <article class="ws-allocation-card {{ $variance<-.0001?'is-short':($variance>.0001?'is-over':'is-match') }}">
                                         <div class="ws-allocation-card-head">
                                             <span>{{ $stock->warehouse?->source_database }}</span>
                                             <span class="ws-badge {{ $stock->result==='MATCH'?'open':'closed' }}">{{ $stock->result==='MATCH'?'COCOK':($variance>0?'LEBIH':'KURANG') }}</span>
@@ -192,18 +215,18 @@
                                         <strong class="ws-allocation-warehouse-code">{{ $stock->warehouse?->warehouse_code }}</strong>
                                         <small class="ws-allocation-warehouse-name">{{ $stock->warehouse?->warehouse_name }}</small>
                                         <div class="ws-allocation-card-metrics">
-                                            <span>Snapshot Stok<b>{{ number_format((float)$stock->system_qty,4,'.',',') }}</b></span>
-                                            <span>Sales Invoice (-)<b class="{{ $stockSales > 0 ? 'negative' : '' }}">{{ number_format($stockSales,4,'.',',') }}</b></span>
-                                            <span>Pending GT (+)<b class="{{ $stockPendingGt > 0 ? 'positive' : '' }}">{{ number_format($stockPendingGt,4,'.',',') }}</b></span>
-                                            <span>Stok Validasi<b>{{ number_format($stockValidation,4,'.',',') }}</b></span>
-                                            <span>Fisik Dialokasikan<b>{{ number_format((float)$stock->allocated_physical_qty,4,'.',',') }}</b></span>
-                                            <span>Selisih<b class="{{ $variance<0?'negative':($variance>0?'positive':'') }}">{{ number_format($variance,4,'.',',') }}</b></span>
+                                            <span>Snapshot Stok<b>{{ $fmtQty($stock->system_qty) }}</b></span>
+                                            <span>Sales Invoice (-)<b class="{{ $stockSales > 0 ? 'negative' : '' }}">{{ $fmtQty($stockSales) }}</b></span>
+                                            <span>Pending GT (+)<b class="{{ $stockPendingGt > 0 ? 'positive' : '' }}">{{ $fmtQty($stockPendingGt) }}</b></span>
+                                            <span>Stok Validasi<b>{{ $fmtQty($stockValidation) }}</b></span>
+                                            <span>Fisik Dialokasikan<b>{{ $fmtQty($stock->allocated_physical_qty) }}</b></span>
+                                            <span>Selisih<b class="{{ $variance<0?'negative':($variance>0?'positive':'') }}">{{ $fmtQty($variance) }}</b></span>
                                         </div>
                                         @if($stockSales > 0)
                                             <div class="ws-sales-invoice-list">
                                                 <strong>Sales Invoice {{ $stock->sales_invoice_date?->format('d/m/Y') }}</strong>
                                                 @foreach($invoiceDetails as $invoice)
-                                                    <span>{{ $invoice['invoice_number'] ?? '-' }} <b>{{ number_format((float)($invoice['qty'] ?? 0),4,'.',',') }}</b></span>
+                                                    <span>{{ $invoice['invoice_number'] ?? '-' }} <b>{{ $fmtQty($invoice['qty'] ?? 0) }}</b></span>
                                                 @endforeach
                                             </div>
                                         @endif
@@ -211,7 +234,7 @@
                                             <div class="ws-pending-transfer-list">
                                                 <strong>Good Transfer belum Received</strong>
                                                 @foreach($pendingTransferDetails as $transfer)
-                                                    <span>{{ $transfer['mutation_number'] ?? '-' }} · {{ !empty($transfer['mutation_date']) ? \Carbon\Carbon::parse($transfer['mutation_date'])->format('d/m/Y') : '-' }} · {{ $transfer['source_warehouse_code'] ?? '-' }} → {{ $transfer['destination_warehouse_code'] ?? '-' }} · {{ number_format((float)($transfer['document_qty'] ?? 0),4,'.',',') }} {{ $transfer['uom_code'] ?? '' }} <b>+{{ number_format((float)($transfer['qty_smallest'] ?? 0),4,'.',',') }}</b></span>
+                                                    <span>{{ $transfer['mutation_number'] ?? '-' }} · {{ !empty($transfer['mutation_date']) ? \Carbon\Carbon::parse($transfer['mutation_date'])->format('d/m/Y') : '-' }} · {{ $transfer['source_warehouse_code'] ?? '-' }} → {{ $transfer['destination_warehouse_code'] ?? '-' }} · {{ $fmtQty($transfer['document_qty'] ?? 0) }} {{ $transfer['uom_code'] ?? '' }} <b>+{{ $fmtQty($transfer['qty_smallest'] ?? 0) }}</b></span>
                                                 @endforeach
                                             </div>
                                         @endif
@@ -224,8 +247,8 @@
                         <form method="POST" action="{{ route('warehouse.admin.items.validate',[$period,$item]) }}" class="ws-validation-form" data-physical-total="{{ (float)$item->physical_qty }}" data-system-total="{{ (float)$item->system_qty }}">
                             @csrf @method('PUT')
                             <div class="ws-validation-help">
-                                <strong>Validasi Stok: Sales Invoice + Pending Good Transfer</strong>
-                                <p>Stok validasi dihitung per gudang: <b>Snapshot - Sales Invoice Hari Cek + Good Transfer belum Received</b>. Good Transfer hanya diambil bila gudang yang dicek adalah DestinationWarehouseID. Qty fisik checker lalu dibagi proporsional berdasarkan stok validasi tersebut.</p>
+                                <strong>Validasi Stok: Proporsional Bilangan Bulat + Koreksi Admin</strong>
+                                <p>Stok validasi = <b>Snapshot - Sales Invoice Hari Cek + Good Transfer belum Received</b>. Sistem membagi Qty Fisik Checker secara proporsional tanpa desimal. Admin dapat mengubah <b>Qty Selisih</b>; total alokasi wajib tetap sama dengan Qty Fisik Checker.</p>
                             </div>
                             <div class="ws-allocation-horizontal-scroll" aria-label="Distribusi fisik proporsional per gudang">
                                 <div class="ws-allocation-horizontal-track">
@@ -237,8 +260,9 @@
                                             $stockAfterSales = (float)($salesInfo['adjusted_system_qty'] ?? $stock->system_qty);
                                             $stockPendingGt = (float)($pendingInfo['pending_transfer_qty'] ?? 0);
                                             $stockValidation = (float)($pendingInfo['validation_system_qty'] ?? ($stockAfterSales + $stockPendingGt));
+                                            $canAllocate = $stock->item_id !== null;
                                         @endphp
-                                        <article class="ws-allocation-card" data-stock-row data-system="{{ $stockValidation }}" data-can-allocate="{{ $stock->item_id !== null && $stockValidation > 0 ? '1' : '0' }}">
+                                        <article class="ws-allocation-card" data-stock-row data-stock-id="{{ $stock->id }}" data-system="{{ $stockValidation }}" data-can-allocate="{{ $canAllocate ? '1' : '0' }}">
                                             <div class="ws-allocation-card-head">
                                                 <span>{{ $stock->warehouse?->source_database }}</span>
                                                 <span class="ws-allocation-card-index">Gudang {{ $loop->iteration }}</span>
@@ -246,19 +270,31 @@
                                             <strong class="ws-allocation-warehouse-code">{{ $stock->warehouse?->warehouse_code }}</strong>
                                             <small class="ws-allocation-warehouse-name">{{ $stock->warehouse?->warehouse_name }}</small>
                                             <div class="ws-allocation-card-metrics">
-                                                <span>Snapshot Stok<b>{{ number_format((float)$stock->system_qty,4,'.',',') }}</b></span>
-                                                <span>Sales Invoice (-)<b class="{{ $stockSales > 0 ? 'negative' : '' }}">{{ number_format($stockSales,4,'.',',') }}</b></span>
-                                                <span>Pending GT (+)<b class="{{ $stockPendingGt > 0 ? 'positive' : '' }}">{{ number_format($stockPendingGt,4,'.',',') }}</b></span>
-                                                <span>Stok Validasi<b>{{ number_format($stockValidation,4,'.',',') }}</b></span>
+                                                <span>Snapshot Stok<b>{{ $fmtQty($stock->system_qty) }}</b></span>
+                                                <span>Sales Invoice (-)<b class="{{ $stockSales > 0 ? 'negative' : '' }}">{{ $fmtQty($stockSales) }}</b></span>
+                                                <span>Pending GT (+)<b class="{{ $stockPendingGt > 0 ? 'positive' : '' }}">{{ $fmtQty($stockPendingGt) }}</b></span>
+                                                <span>Stok Validasi<b>{{ $fmtQty($stockValidation) }}</b></span>
                                                 <span>Proporsi Stok<b data-proportion>-</b></span>
-                                                <span>Fisik Proporsional<b data-proportional-qty>-</b></span>
-                                                <span>Selisih<b data-row-variance>-</b></span>
+                                                <span>Fisik Dialokasikan<b data-proportional-qty>-</b></span>
+                                                <span>Selisih Aktual<b data-row-variance>-</b></span>
                                             </div>
+
+                                            @if($canAllocate)
+                                                <label class="ws-variance-edit">
+                                                    <span>Qty Selisih — bisa diedit Admin</span>
+                                                    <input type="number" step="any" inputmode="decimal" data-variance-input value="0" autocomplete="off">
+                                                    <small>Minus = kurang, plus = lebih. Sistem menjaga Fisik Dialokasikan tetap bilangan bulat.</small>
+                                                </label>
+                                                <input type="hidden" name="allocation_qty[{{ $stock->id }}]" value="0" data-allocation-input>
+                                            @else
+                                                <div class="ws-variance-edit"><span>Qty Selisih</span><small>ItemCode ini tidak tersedia pada database gudang tersebut sehingga tidak dapat dialokasikan.</small></div>
+                                            @endif
+
                                             @if($stockSales > 0)
                                                 <div class="ws-sales-invoice-list">
                                                     <strong>Sales Invoice {{ !empty($salesInfo['sales_date']) ? \Carbon\Carbon::parse($salesInfo['sales_date'])->format('d/m/Y') : '' }}</strong>
                                                     @foreach(($salesInfo['invoices'] ?? []) as $invoice)
-                                                        <span>{{ $invoice['invoice_number'] ?? '-' }} <b>{{ number_format((float)($invoice['qty'] ?? 0),4,'.',',') }}</b></span>
+                                                        <span>{{ $invoice['invoice_number'] ?? '-' }} <b>{{ $fmtQty($invoice['qty'] ?? 0) }}</b></span>
                                                     @endforeach
                                                 </div>
                                             @endif
@@ -266,7 +302,7 @@
                                                 <div class="ws-pending-transfer-list">
                                                     <strong>Good Transfer belum Received</strong>
                                                     @foreach(($pendingInfo['transfers'] ?? []) as $transfer)
-                                                        <span>{{ $transfer['mutation_number'] ?? '-' }} · {{ !empty($transfer['mutation_date']) ? \Carbon\Carbon::parse($transfer['mutation_date'])->format('d/m/Y') : '-' }} · {{ $transfer['source_warehouse_code'] ?? '-' }} → {{ $transfer['destination_warehouse_code'] ?? '-' }} · {{ number_format((float)($transfer['document_qty'] ?? 0),4,'.',',') }} {{ $transfer['uom_code'] ?? '' }} <b>+{{ number_format((float)($transfer['qty_smallest'] ?? 0),4,'.',',') }}</b></span>
+                                                        <span>{{ $transfer['mutation_number'] ?? '-' }} · {{ !empty($transfer['mutation_date']) ? \Carbon\Carbon::parse($transfer['mutation_date'])->format('d/m/Y') : '-' }} · {{ $transfer['source_warehouse_code'] ?? '-' }} → {{ $transfer['destination_warehouse_code'] ?? '-' }} · {{ $fmtQty($transfer['document_qty'] ?? 0) }} {{ $transfer['uom_code'] ?? '' }} <b>+{{ $fmtQty($transfer['qty_smallest'] ?? 0) }}</b></span>
                                                     @endforeach
                                                 </div>
                                             @endif
@@ -280,15 +316,16 @@
                                 </div>
                             </div>
                             <div class="ws-allocation-summary ws-allocation-summary-sales">
-                                <span>Snapshot Sistem <b>{{ number_format((float)$item->system_qty,4,'.',',') }}</b></span>
-                                <span>Sales Invoice (-) <b class="{{ $salesTotal > 0 ? 'negative' : '' }}">{{ number_format($salesTotal,4,'.',',') }}</b></span>
-                                <span>Pending GT (+) <b class="{{ $pendingTransferTotal > 0 ? 'positive' : '' }}">{{ number_format($pendingTransferTotal,4,'.',',') }}</b></span>
-                                <span>Stok Validasi <b>{{ number_format($validationSystemTotal,4,'.',',') }}</b></span>
-                                <span>Fisik Checker <b>{{ number_format((float)$item->physical_qty,4,'.',',') }}</b></span>
+                                <span>Snapshot Sistem <b>{{ $fmtQty($item->system_qty) }}</b></span>
+                                <span>Sales Invoice (-) <b class="{{ $salesTotal > 0 ? 'negative' : '' }}">{{ $fmtQty($salesTotal) }}</b></span>
+                                <span>Pending GT (+) <b class="{{ $pendingTransferTotal > 0 ? 'positive' : '' }}">{{ $fmtQty($pendingTransferTotal) }}</b></span>
+                                <span>Stok Validasi <b>{{ $fmtQty($validationSystemTotal) }}</b></span>
+                                <span>Fisik Checker <b>{{ $fmtQty($item->physical_qty) }}</b></span>
                                 <span>Total Distribusi <b data-allocation-total>0</b></span>
                             </div>
+                            <span class="ws-allocation-total-warning" data-allocation-warning></span>
                             <label class="ws-validation-note">Catatan Validasi<textarea name="validation_note" rows="2" placeholder="Opsional: catatan hasil validasi"></textarea></label>
-                            <button class="btn primary" type="submit" data-validation-save>Simpan Validasi Proporsional</button>
+                            <button class="btn primary" type="submit" data-validation-save>Simpan Validasi</button>
                         </form>
                     @endif
                 @else
@@ -299,7 +336,7 @@
                                     <div class="ws-allocation-card-head"><span>{{ $stock->warehouse?->source_database }}</span></div>
                                     <strong class="ws-allocation-warehouse-code">{{ $stock->warehouse?->warehouse_code }}</strong>
                                     <small class="ws-allocation-warehouse-name">{{ $stock->warehouse?->warehouse_name }}</small>
-                                    <div class="ws-allocation-system-row"><span>Snapshot Stok</span><b>{{ number_format((float)$stock->system_qty,4,'.',',') }}</b></div>
+                                    <div class="ws-allocation-system-row"><span>Snapshot Stok</span><b>{{ $fmtQty($stock->system_qty) }}</b></div>
                                 </article>
                             @endforeach
                         </div>
@@ -380,7 +417,7 @@ document.addEventListener('DOMContentLoaded',()=>{
             const response=await fetch(`${url}?${params.toString()}`,{headers:{Accept:'application/json','X-Requested-With':'XMLHttpRequest'}});const json=await response.json();
             if(!response.ok)throw new Error(json?.message||'Gagal membaca stok gabungan.');
             page=json.meta?.page||1;lastPage=json.meta?.last_page||1;render(json.data||[]);
-            info.textContent=`Menampilkan ${json.meta?.from||0}-${json.meta?.to||0} dari ${json.meta?.total||0} item unik dengan total stok gabungan > 0`;
+            info.textContent=`Menampilkan ${json.meta?.from||0}-${json.meta?.to||0} dari ${json.meta?.total||0} ItemCode unik dengan total stok gabungan > 0`;
             pageLabel.textContent=`Halaman ${page} / ${lastPage}`;prev.disabled=page<=1;next.disabled=page>=lastPage;
         }catch(e){currentRows=[];body.innerHTML=`<tr><td colspan="5" class="empty">${escapeHtml(e.message||'Gagal mengambil stok ERP.')}</td></tr>`;info.textContent='';pageLabel.textContent='';}
         finally{loading=false;}
@@ -396,39 +433,112 @@ document.addEventListener('DOMContentLoaded',()=>{
 <script>
 document.addEventListener('DOMContentLoaded',()=>{
     const qty=v=>Number(v||0).toLocaleString('id-ID',{minimumFractionDigits:0,maximumFractionDigits:4});
+    const plain=v=>{
+        const n=Math.abs(Number(v||0))<0.0001?0:Math.round(Number(v||0)*10000)/10000;
+        return String(n);
+    };
 
     document.querySelectorAll('.ws-validation-form').forEach(form=>{
-        const physical=Math.round(Number(form.dataset.physicalTotal||0)*10000)/10000;
+        const physicalRaw=Number(form.dataset.physicalTotal||0);
+        const physical=Math.round(physicalRaw);
+        const physicalIsWhole=Math.abs(physicalRaw-physical)<0.0001;
         const rows=[...form.querySelectorAll('[data-stock-row]')];
-        const eligible=rows.filter(row=>row.dataset.canAllocate==='1'&&Number(row.dataset.system||0)>0);
-        const systemTotal=eligible.reduce((sum,row)=>sum+Number(row.dataset.system||0),0);
-        let allocated=0;
-
-        eligible.forEach((row,index)=>{
-            const system=Number(row.dataset.system||0);
-            const isLast=index===eligible.length-1;
-            const value=isLast
-                ? Math.round((physical-allocated)*10000)/10000
-                : Math.round((physical*(system/systemTotal))*10000)/10000;
-            allocated=Math.round((allocated+value)*10000)/10000;
-            const proportion=systemTotal>0?(system/systemTotal)*100:0;
-            const variance=value-system;
-            row.querySelector('[data-proportion]').textContent=proportion.toLocaleString('id-ID',{minimumFractionDigits:2,maximumFractionDigits:2})+'%';
-            row.querySelector('[data-proportional-qty]').textContent=qty(value);
-            const varianceEl=row.querySelector('[data-row-variance]');
-            varianceEl.textContent=qty(variance);
-            varianceEl.classList.toggle('negative',variance<-.0001);
-            varianceEl.classList.toggle('positive',variance>.0001);
-        });
-
-        rows.filter(row=>!eligible.includes(row)).forEach(row=>{
-            row.querySelector('[data-proportion]').textContent='0%';
-            row.querySelector('[data-proportional-qty]').textContent='0';
-            row.querySelector('[data-row-variance]').textContent=qty(-Number(row.dataset.system||0));
-        });
-
+        const weighted=rows.filter(row=>row.dataset.canAllocate==='1'&&Number(row.dataset.system||0)>0);
+        const systemTotal=weighted.reduce((sum,row)=>sum+Number(row.dataset.system||0),0);
+        const saveButton=form.querySelector('[data-validation-save]');
         const totalEl=form.querySelector('[data-allocation-total]');
-        if(totalEl)totalEl.textContent=qty(allocated);
+        const warning=form.querySelector('[data-allocation-warning]');
+
+        const setCardState=(row,variance)=>{
+            row.classList.toggle('is-short',variance<-.0001);
+            row.classList.toggle('is-over',variance>.0001);
+            row.classList.toggle('is-match',Math.abs(variance)<=.0001);
+        };
+
+        const applyAllocation=(row,value,syncVariance=true)=>{
+            const allocationInput=row.querySelector('[data-allocation-input]');
+            if(!allocationInput)return;
+            const system=Number(row.dataset.system||0);
+            const allocation=Math.max(0,Math.round(Number(value||0)));
+            allocationInput.value=String(allocation);
+            const allocationLabel=row.querySelector('[data-proportional-qty]');
+            if(allocationLabel)allocationLabel.textContent=qty(allocation);
+            const variance=allocation-system;
+            const varianceLabel=row.querySelector('[data-row-variance]');
+            if(varianceLabel){
+                varianceLabel.textContent=qty(variance);
+                varianceLabel.classList.toggle('negative',variance<-.0001);
+                varianceLabel.classList.toggle('positive',variance>.0001);
+            }
+            const varianceInput=row.querySelector('[data-variance-input]');
+            if(varianceInput&&syncVariance)varianceInput.value=plain(variance);
+            setCardState(row,variance);
+        };
+
+        const updateTotal=()=>{
+            const allocated=rows.reduce((sum,row)=>{
+                const input=row.querySelector('[data-allocation-input]');
+                return sum+(input?Number(input.value||0):0);
+            },0);
+            if(totalEl)totalEl.textContent=qty(allocated);
+
+            const valid=physicalIsWhole&&allocated===physical;
+            if(warning){
+                warning.classList.toggle('ok',valid);
+                if(!physicalIsWhole){
+                    warning.textContent='Qty Fisik Checker masih mengandung desimal. Checker harus mengubahnya menjadi bilangan bulat sebelum validasi.';
+                }else if(valid){
+                    warning.textContent=`Total distribusi sudah sesuai Qty Fisik Checker: ${qty(physical)}.`;
+                }else{
+                    warning.textContent=`Total distribusi ${qty(allocated)} belum sama dengan Qty Fisik Checker ${qty(physical)}. Edit Qty Selisih pada gudang terkait.`;
+                }
+            }
+            if(saveButton)saveButton.disabled=!valid;
+        };
+
+        // Largest remainder: floor semua quota, kemudian sisa unit diberikan ke
+        // fractional remainder terbesar. Hasil selalu integer dan totalnya tepat.
+        const quotas=weighted.map(row=>{
+            const system=Number(row.dataset.system||0);
+            const exact=systemTotal>0?(physical*(system/systemTotal)):0;
+            return {row,system,exact,base:Math.floor(exact),fraction:exact-Math.floor(exact)};
+        });
+        let baseTotal=quotas.reduce((sum,q)=>sum+q.base,0);
+        let remaining=Math.max(0,physical-baseTotal);
+        quotas.sort((a,b)=>b.fraction-a.fraction||Number(a.row.dataset.stockId)-Number(b.row.dataset.stockId));
+        quotas.forEach((q,index)=>{q.value=q.base+(index<remaining?1:0);});
+
+        rows.forEach(row=>{
+            const system=Number(row.dataset.system||0);
+            const proportion=systemTotal>0&&system>0?(system/systemTotal)*100:0;
+            const prop=row.querySelector('[data-proportion]');
+            if(prop)prop.textContent=proportion.toLocaleString('id-ID',{minimumFractionDigits:0,maximumFractionDigits:2})+'%';
+
+            const quota=quotas.find(q=>q.row===row);
+            applyAllocation(row,quota?quota.value:0,true);
+
+            const varianceInput=row.querySelector('[data-variance-input]');
+            if(varianceInput){
+                varianceInput.addEventListener('change',()=>{
+                    const desiredVariance=Number(varianceInput.value||0);
+                    const desiredAllocation=Math.max(0,Math.round(system+desiredVariance));
+                    applyAllocation(row,desiredAllocation,true);
+                    updateTotal();
+                });
+            }
+        });
+
+        updateTotal();
+        form.addEventListener('submit',event=>{
+            const allocated=rows.reduce((sum,row)=>{
+                const input=row.querySelector('[data-allocation-input]');
+                return sum+(input?Number(input.value||0):0);
+            },0);
+            if(!physicalIsWhole||allocated!==physical){
+                event.preventDefault();
+                updateTotal();
+            }
+        });
     });
 });
 </script>

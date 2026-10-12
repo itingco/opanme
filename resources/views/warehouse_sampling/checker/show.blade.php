@@ -3,7 +3,7 @@
 @section('page-class','ws-checker-mobile-page')
 @section('content')
 @push('styles')
-<link rel="stylesheet" href="{{ asset('assets/css/warehouse-sampling.css') }}?v=20260930mobile">
+<link rel="stylesheet" href="{{ asset('assets/css/warehouse-sampling.css') }}?v=20261012integerqty">
 @endpush
 @php
     $total = (int) $period->items_count;
@@ -13,6 +13,12 @@
     $editable = $period->isOpen() && !$finalized;
     $pct = $total > 0 ? min(100, ($filled / $total) * 100) : 0;
     $targetCount = $total > 0 ? (int) ceil($total * ((float)$period->target_percentage / 100)) : 0;
+    $fmtQty = static function ($value): string {
+        $number = round((float)($value ?? 0), 4);
+        if (abs($number) < 0.0001) $number = 0.0;
+        $formatted = rtrim(rtrim(number_format($number, 4, '.', ','), '0'), '.');
+        return $formatted === '-0' ? '0' : $formatted;
+    };
 @endphp
 
 <div class="page-heading">
@@ -45,7 +51,7 @@
 @if($finalized)
     <div class="ws-final-lock-note"><strong>Hasil checker sudah final.</strong> Semua Qty dan komentar dikunci. Admin Gudang dapat melanjutkan validasi.</div>
 @elseif($editable)
-    <div class="ws-lock-note"><strong>Klik kode barang untuk input.</strong> Setiap item disimpan satu per satu sebagai draft melalui modal. Draft masih bisa diedit sampai Anda menekan <b>Finalisasi Semua Item</b>.</div>
+    <div class="ws-lock-note"><strong>Klik kode barang untuk input.</strong> Qty Fisik menggunakan bilangan bulat tanpa desimal. Draft masih bisa diedit sampai Anda menekan <b>Finalisasi Semua Item</b>.</div>
 @endif
 
 <section class="panel ws-modal-input-panel">
@@ -76,7 +82,7 @@
                                 data-code="{{ $item->item_code }}"
                                 data-name="{{ $item->item_name }}"
                                 data-uom="{{ $item->uom_code }}"
-                                data-qty="{{ $item->physical_qty }}"
+                                data-qty="{{ $hasDraft ? (int)round((float)$item->physical_qty) : '' }}"
                                 data-comment="{{ $item->checker_comment }}">{{ $item->item_code }}</button>
                         @else
                             <strong>{{ $item->item_code }}</strong>
@@ -84,7 +90,7 @@
                     </td>
                     <td data-label="Nama Item"><strong>{{ $item->item_name }}</strong><small>{{ $item->stocks_count }} gudang terkait</small></td>
                     <td data-label="UOM"><span class="ws-uom-pill">{{ $item->uom_code }}</span></td>
-                    <td data-label="Qty Fisik Draft" class="num"><strong>{{ $hasDraft ? number_format((float)$item->physical_qty,4,'.',',') : '-' }}</strong></td>
+                    <td data-label="Qty Fisik Draft" class="num"><strong>{{ $hasDraft ? $fmtQty($item->physical_qty) : '-' }}</strong></td>
                     <td data-label="Komentar"><div class="ws-table-comment-preview">{{ filled($item->checker_comment) ? $item->checker_comment : '-' }}</div></td>
                     <td data-label="Status">
                         @if($finalized)<span class="ws-badge open">FINAL</span>
@@ -118,8 +124,9 @@
         <form method="POST" id="ws-item-entry-form" class="stack-form">@csrf @method('PUT')
             <div class="ws-modal-item-meta"><span id="ws-item-modal-line">#-</span><span id="ws-item-modal-uom">UOM</span></div>
             <label>Qty Fisik Total Ditemukan
-                <input type="number" name="physical_qty" id="ws-item-modal-qty" min="0" step="0.0001" inputmode="decimal" required autocomplete="off" placeholder="0.0000">
+                <input type="number" name="physical_qty" id="ws-item-modal-qty" min="0" step="1" inputmode="numeric" required autocomplete="off" placeholder="0">
             </label>
+            <small class="ws-note">Qty Fisik wajib bilangan bulat. Pembagian per gudang oleh Admin juga akan dibuat tanpa angka desimal.</small>
             <label>Komentar Checker
                 <textarea name="checker_comment" id="ws-item-modal-comment" rows="4" maxlength="1000" placeholder="Opsional: kondisi fisik, lokasi, kemasan, catatan..."></textarea>
             </label>

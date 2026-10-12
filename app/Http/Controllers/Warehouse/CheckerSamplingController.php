@@ -65,8 +65,10 @@ class CheckerSamplingController extends Controller
         abort_if($this->isFinalized($sampleCycle), 422, 'Hasil checker sudah difinalisasi dan tidak dapat diedit lagi.');
 
         $data = $request->validate([
-            'physical_qty' => ['required','numeric','min:0','max:99999999999999999999'],
+            'physical_qty' => ['required','integer','min:0','max:999999999999'],
             'checker_comment' => ['nullable','string','max:1000'],
+        ], [
+            'physical_qty.integer' => 'Qty Fisik harus bilangan bulat tanpa angka desimal.',
         ]);
 
         DB::transaction(function () use ($request, $sampleCycle, $sampleCycleItem, $data): void {
@@ -80,12 +82,11 @@ class CheckerSamplingController extends Controller
                 ->findOrFail($sampleCycleItem->id);
 
             $item->update([
-                'physical_qty' => round((float) $data['physical_qty'], 4),
+                'physical_qty' => (int) $data['physical_qty'],
                 'checker_comment' => trim((string) ($data['checker_comment'] ?? '')) ?: null,
                 'result' => null,
                 'checked_by' => $request->user()->id,
                 'checked_at' => null,
-                // Any new draft invalidates previous Admin validation/allocation.
                 'validated_by' => null,
                 'validated_at' => null,
                 'validation_note' => null,
@@ -140,9 +141,10 @@ class CheckerSamplingController extends Controller
 
             $checkedAt = now();
             foreach ($items as $item) {
-                $physical = round((float) $item->physical_qty, 4);
+                $physical = (int) round((float) $item->physical_qty);
                 $system = round((float) $item->system_qty, 4);
                 $item->update([
+                    'physical_qty' => $physical,
                     'result' => abs($physical - $system) < 0.0001 ? SampleCheck::RESULT_MATCH : SampleCheck::RESULT_MISMATCH,
                     'checked_by' => $item->checked_by ?: $request->user()->id,
                     'checked_at' => $checkedAt,

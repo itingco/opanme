@@ -7,7 +7,6 @@ use App\Models\SampleCheck;
 use App\Models\SampleCycle;
 use App\Models\SampleCycleItem;
 use App\Models\SampleCycleItemStock;
-use App\Models\SampleCycleWarehouse;
 use App\Models\StockOpnameCycle;
 use App\Models\User;
 use App\Services\ErpCatalogService;
@@ -83,7 +82,6 @@ class WarehouseSamplingController extends Controller
             $cycle = SampleCycle::create([
                 'cycle_no' => $numbers->next(now()),
                 'created_by' => $request->user()->id,
-                // Legacy required columns retain the first selected warehouse for compatibility.
                 'source_database' => $first['source_database'],
                 'erp_warehouse_id' => $first['warehouse_id'],
                 'warehouse_code' => $first['warehouse_code'],
@@ -118,8 +116,7 @@ class WarehouseSamplingController extends Controller
         SampleCycle $sampleCycle,
         WarehouseSamplingSalesInvoiceService $salesInvoices,
         WarehouseSamplingPendingTransferService $pendingTransfers
-    ): View
-    {
+    ): View {
         $this->assertManage($request, $sampleCycle);
 
         $sampleCycle->load([
@@ -201,9 +198,8 @@ class WarehouseSamplingController extends Controller
         $page = max(1, (int) ($data['page'] ?? 1));
         $perPage = max(10, min(100, (int) ($data['per_page'] ?? 50)));
 
-        // IMPORTANT: the admin chooses a combined item, not an item per warehouse.
-        // availableItems() has already merged the same ItemCode + UOM across every
-        // database/warehouse in the period and summed its system quantity.
+        // ItemCode is the unique display key. The same code from AS_INGCO / AS_SMI
+        // is intentionally shown only once and its stock is summed.
         $rows = $multiStock->availableItems($sampleCycle);
 
         if ($query !== '') {
@@ -216,8 +212,8 @@ class WarehouseSamplingController extends Controller
 
         $selectedCounts = SampleCycleItem::query()
             ->where('sample_cycle_id', $sampleCycle->id)
-            ->get(['item_code', 'uom_code'])
-            ->groupBy(fn (SampleCycleItem $item): string => mb_strtoupper(trim($item->item_code)).'|'.mb_strtoupper(trim($item->uom_code)))
+            ->get(['item_code'])
+            ->groupBy(fn (SampleCycleItem $item): string => mb_strtoupper(trim($item->item_code)))
             ->map->count();
 
         $total = $rows->count();
@@ -231,7 +227,7 @@ class WarehouseSamplingController extends Controller
                 'item_code' => $row['item_code'],
                 'item_name' => $row['item_name'],
                 'uom_code' => $row['uom_code'],
-                'system_qty' => number_format((float) $row['total_system_qty'], 4, '.', ''),
+                'system_qty' => round((float) $row['total_system_qty'], 4),
                 'selected_count' => (int) ($selectedCounts[$row['key']] ?? 0),
             ];
         })->all();
@@ -299,7 +295,7 @@ class WarehouseSamplingController extends Controller
             return $count;
         });
 
-        return back()->with('success', $inserted.' item berhasil ditambahkan. Stok sistem sudah disnapshot terpisah untuk setiap database/gudang. Item yang sama tetap dapat dipilih lagi pada penyimpanan berikutnya.');
+        return back()->with('success', $inserted.' item berhasil ditambahkan. Kode item yang sama lintas database digabung menjadi satu item, sementara snapshot per database/gudang tetap disimpan terpisah.');
     }
 
     public function removeItem(Request $request, SampleCycle $sampleCycle, SampleCycleItem $sampleCycleItem): RedirectResponse
@@ -336,11 +332,23 @@ class WarehouseSamplingController extends Controller
 
         $data = $request->validate([
             'validation_note' => ['nullable', 'string', 'max:2000'],
+            'allocation_qty' => ['nullable', 'array'],
+            'allocation_qty.*' => ['nullable', 'integer', 'min:0', 'max:999999999999'],
+        ], [
+            'allocation_qty.*.integer' => 'Qty alokasi per gudang wajib bilangan bulat tanpa desimal.',
         ]);
 
         DB::transaction(function () use ($request, $sampleCycleItem, $data, $salesInvoices, $pendingTransfers): void {
             $item = SampleCycleItem::query()->lockForUpdate()->findOrFail($sampleCycleItem->id);
             $item->loadMissing('cycle');
+
+            $physicalRaw = (float) $item->physical_qty;
+            $physicalTotal = (int) round($physicalRaw);
+            if (abs($physicalRaw - $physicalTotal) > 0.0001) {
+                throw ValidationException::withMessages([
+                    'allocation_qty' => 'Qty Fisik Checker harus bilangan bulat agar pembagian proporsional tidak menghasilkan desimal. Minta Checker memperbaiki Qty Fisik terlebih dahulu.',
+                ]);
+            }
 
             $stocks = SampleCycleItemStock::query()
                 ->where('sample_cycle_item_id', $item->id)
@@ -350,11 +358,7 @@ class WarehouseSamplingController extends Controller
                 ->get();
             $item->setRelation('stocks', $stocks);
 
-            // Sales Invoice dibaca ulang pada saat tombol validasi ditekan supaya
-            // angka yang disimpan merupakan kondisi terbaru di tanggal checker.
             $salesAdjustments = $salesInvoices->forItems(collect([$item]));
-            // Pending Good Transfer dibaca ulang saat validasi. Hanya transfer dengan
-            // DestinationWarehouseID = gudang yang dicek dan ReceivedBy IS NULL yang dihitung.
             $pendingTransferAdjustments = $pendingTransfers->forItems(collect([$item]), $salesAdjustments);
 
             $validationSystemByStock = [];
@@ -384,40 +388,81 @@ class WarehouseSamplingController extends Controller
                 $stock->setAttribute('validation_system_qty', $validationSystemByStock[(int) $stock->id]);
             }
 
-            $physicalTotal = round((float) $item->physical_qty, 4);
-            $eligible = $stocks->filter(function (SampleCycleItemStock $stock) use ($validationSystemByStock): bool {
-                return $stock->item_id !== null && ($validationSystemByStock[(int) $stock->id] ?? 0) > 0;
+            $allocatable = $stocks->filter(fn (SampleCycleItemStock $stock): bool => $stock->item_id !== null)->values();
+            $weighted = $allocatable->filter(function (SampleCycleItemStock $stock) use ($validationSystemByStock): bool {
+                return ($validationSystemByStock[(int) $stock->id] ?? 0) > 0;
             })->values();
-            $validationSystemTotal = round((float) $eligible->sum(
+
+            $validationSystemTotal = (float) $weighted->sum(
                 fn (SampleCycleItemStock $stock): float => (float) ($validationSystemByStock[(int) $stock->id] ?? 0)
-            ), 4);
+            );
 
-            if ($validationSystemTotal <= 0 && $physicalTotal > 0) {
-                throw ValidationException::withMessages([
-                    'validation_note' => 'Distribusi proporsional tidak dapat dihitung karena total stok validasi (snapshot - Sales Invoice + Pending Good Transfer) adalah 0 atau minus.',
-                ]);
-            }
-
+            $submitted = $data['allocation_qty'] ?? [];
             $allocations = [];
-            $allocated = 0.0;
-            foreach ($eligible as $index => $stock) {
-                $isLast = $index === $eligible->count() - 1;
-                $validationSystem = (float) ($validationSystemByStock[(int) $stock->id] ?? 0);
-                $value = $isLast
-                    ? round($physicalTotal - $allocated, 4)
-                    : round($physicalTotal * ($validationSystem / $validationSystemTotal), 4);
 
-                if (abs($value) < 0.0001) {
-                    $value = 0.0;
+            if ($submitted !== []) {
+                $manualTotal = 0;
+                foreach ($allocatable as $stock) {
+                    $stockId = (int) $stock->id;
+                    $key = array_key_exists($stockId, $submitted) ? $stockId : (string) $stockId;
+                    if (! array_key_exists($key, $submitted)) {
+                        throw ValidationException::withMessages([
+                            'allocation_qty' => 'Qty alokasi salah satu gudang tidak terkirim. Refresh halaman lalu ulangi validasi.',
+                        ]);
+                    }
+
+                    $value = (int) $submitted[$key];
+                    if ($value < 0) {
+                        throw ValidationException::withMessages(['allocation_qty' => 'Qty alokasi tidak boleh minus.']);
+                    }
+                    $allocations[$stockId] = $value;
+                    $manualTotal += $value;
                 }
 
-                $allocations[(int) $stock->id] = $value;
-                $allocated = round($allocated + $value, 4);
+                if ($manualTotal !== $physicalTotal) {
+                    throw ValidationException::withMessages([
+                        'allocation_qty' => 'Total distribusi Admin ('.$manualTotal.') harus sama persis dengan Qty Fisik Checker ('.$physicalTotal.'). Sesuaikan Qty Selisih antar gudang.',
+                    ]);
+                }
+            } else {
+                // Largest-remainder method: proportional, whole-number allocations,
+                // and the final sum is guaranteed to equal Qty Fisik Checker.
+                if ($physicalTotal > 0 && $validationSystemTotal <= 0) {
+                    throw ValidationException::withMessages([
+                        'allocation_qty' => 'Distribusi proporsional tidak dapat dihitung karena total stok validasi positif adalah 0. Isi koreksi alokasi secara manual dari halaman validasi.',
+                    ]);
+                }
+
+                $baseTotal = 0;
+                $remainders = [];
+                foreach ($weighted as $stock) {
+                    $stockId = (int) $stock->id;
+                    $system = (float) ($validationSystemByStock[$stockId] ?? 0);
+                    $quota = $validationSystemTotal > 0 ? ($physicalTotal * ($system / $validationSystemTotal)) : 0;
+                    $base = (int) floor($quota);
+                    $allocations[$stockId] = $base;
+                    $baseTotal += $base;
+                    $remainders[] = [
+                        'stock_id' => $stockId,
+                        'fraction' => $quota - $base,
+                    ];
+                }
+
+                usort($remainders, static function (array $a, array $b): int {
+                    $cmp = $b['fraction'] <=> $a['fraction'];
+                    return $cmp !== 0 ? $cmp : ($a['stock_id'] <=> $b['stock_id']);
+                });
+
+                $remaining = $physicalTotal - $baseTotal;
+                for ($i = 0; $i < $remaining && isset($remainders[$i]); $i++) {
+                    $allocations[$remainders[$i]['stock_id']]++;
+                }
             }
 
             foreach ($stocks as $stock) {
-                $physical = round((float) ($allocations[(int) $stock->id] ?? 0), 4);
-                $validationSystem = round((float) ($validationSystemByStock[(int) $stock->id] ?? $stock->system_qty), 4);
+                $stockId = (int) $stock->id;
+                $physical = (int) ($allocations[$stockId] ?? 0);
+                $validationSystem = round((float) ($validationSystemByStock[$stockId] ?? $stock->system_qty), 4);
 
                 $stock->save();
                 $stock->update([
@@ -435,7 +480,7 @@ class WarehouseSamplingController extends Controller
             ]);
         });
 
-        return back()->with('success', 'Validasi '.$sampleCycleItem->item_code.' berhasil. Stok validasi dihitung dari Snapshot - Sales Invoice + Pending Good Transfer belum Received, lalu Qty Fisik dibagi proporsional.');
+        return back()->with('success', 'Validasi '.$sampleCycleItem->item_code.' berhasil. Pembagian awal dibuat proporsional tanpa desimal dan Qty Selisih dapat dikoreksi Admin selama total distribusi tetap sama dengan Qty Fisik Checker.');
     }
 
     public function close(Request $request, SampleCycle $sampleCycle): RedirectResponse

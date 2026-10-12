@@ -3,8 +3,25 @@
 @section('page-class','ws-history-page')
 @section('content')
 @push('styles')
-<link rel="stylesheet" href="{{ asset('assets/css/warehouse-sampling.css') }}?v=20260925historyfull">
+<link rel="stylesheet" href="{{ asset('assets/css/warehouse-sampling.css') }}?v=20261012historyqty">
+<style>
+    .ws-history-table tbody tr.ws-history-short{background:#fff4f3!important}
+    .ws-history-table tbody tr.ws-history-over{background:#eff8ff!important}
+    .ws-history-table tbody tr.ws-history-match{background:#f6fef9!important}
+    .ws-history-table tbody tr.ws-history-short:hover{background:#fee4e2!important}
+    .ws-history-table tbody tr.ws-history-over:hover{background:#dff1ff!important}
+    .ws-history-table tbody tr.ws-history-match:hover{background:#ecfdf3!important}
+</style>
 @endpush
+
+@php
+    $fmtQty = static function ($value): string {
+        $number = round((float)($value ?? 0), 4);
+        if (abs($number) < 0.0001) $number = 0.0;
+        $formatted = rtrim(rtrim(number_format($number, 4, '.', ','), '0'), '.');
+        return $formatted === '-0' ? '0' : $formatted;
+    };
+@endphp
 
 <section class="ws-history-hero panel">
     <div class="ws-history-hero-copy">
@@ -45,72 +62,26 @@
 </section>
 
 <section class="ws-history-metrics ws-history-metrics-full">
-    <div class="ws-history-metric-card">
-        <span>Periode</span>
-        <strong>{{ number_format($stats['periods']) }}</strong>
-        <small>Periode closed</small>
-    </div>
-    <div class="ws-history-metric-card">
-        <span>Item Sampling</span>
-        <strong>{{ number_format($stats['items']) }}</strong>
-        <small>Item unik yang pernah dicek</small>
-    </div>
-    <div class="ws-history-metric-card">
-        <span>Baris Gudang-Item</span>
-        <strong>{{ number_format($stats['rows']) }}</strong>
-        <small>Data mentah per gudang</small>
-    </div>
-    <div class="ws-history-metric-card ws-history-success-card">
-        <span>Cocok</span>
-        <strong>{{ number_format($stats['match']) }}</strong>
-        <small>Baris dengan hasil cocok</small>
-    </div>
-    <div class="ws-history-metric-card ws-history-warning-card">
-        <span>Selisih</span>
-        <strong>{{ number_format($stats['mismatch']) }}</strong>
-        <small>Baris dengan hasil selisih</small>
-    </div>
+    <div class="ws-history-metric-card"><span>Periode</span><strong>{{ number_format($stats['periods']) }}</strong><small>Periode closed</small></div>
+    <div class="ws-history-metric-card"><span>Item Sampling</span><strong>{{ number_format($stats['items']) }}</strong><small>Item unik yang pernah dicek</small></div>
+    <div class="ws-history-metric-card"><span>Baris Gudang-Item</span><strong>{{ number_format($stats['rows']) }}</strong><small>Data mentah per gudang</small></div>
+    <div class="ws-history-metric-card ws-history-success-card"><span>Cocok</span><strong>{{ number_format($stats['match']) }}</strong><small>Baris dengan hasil cocok</small></div>
+    <div class="ws-history-metric-card ws-history-warning-card"><span>Selisih</span><strong>{{ number_format($stats['mismatch']) }}</strong><small>Baris dengan hasil selisih</small></div>
 </section>
 
 <section class="panel ws-history-table-panel ws-history-table-panel-full">
     <div class="ws-history-table-head ws-history-table-head-full">
-        <div>
-            <h2>Data Mentah Sampling</h2>
-            <p>{{ number_format($rows->total()) }} baris ditemukan. Satu baris mewakili satu item pada satu gudang.</p>
-        </div>
-        <div class="ws-history-table-note">
-            <strong>Tampilan Full Width</strong>
-            <small>Scroll ke kanan untuk melihat seluruh kolom data mentah.</small>
-        </div>
+        <div><h2>Data Mentah Sampling</h2><p>{{ number_format($rows->total()) }} baris ditemukan. Satu baris mewakili satu item pada satu gudang.</p></div>
+        <div class="ws-history-table-note"><strong>Tampilan Full Width</strong><small>Scroll ke kanan untuk melihat seluruh kolom data mentah.</small></div>
     </div>
 
     <div class="ws-history-table-scroll ws-history-table-scroll-full">
         <table class="ws-history-table ws-history-table-full">
             <thead>
                 <tr>
-                    <th>Tanggal Tutup</th>
-                    <th>Periode</th>
-                    <th>Area</th>
-                    <th>Database</th>
-                    <th>Gudang</th>
-                    <th>Item</th>
-                    <th>UOM</th>
-                    <th class="num">Total Sistem</th>
-                    <th class="num">Fisik Checker</th>
-                    <th class="num">Snapshot Gudang</th>
-                    <th class="num">Sales Invoice</th>
-                    <th class="num">Sistem Setelah Sales</th>
-                    <th class="num">Pending GT</th>
-                    <th class="num">Stok Validasi</th>
-                    <th>No Sales Invoice</th>
-                    <th>No Good Transfer</th>
-                    <th class="num">Alokasi Fisik</th>
-                    <th class="num">Selisih</th>
-                    <th>Hasil</th>
-                    <th>Checker</th>
-                    <th>Komentar Checker</th>
-                    <th>Validator</th>
-                    <th>Catatan Validasi</th>
+                    <th>Tanggal Tutup</th><th>Periode</th><th>Area</th><th>Database</th><th>Gudang</th><th>Item</th><th>UOM</th>
+                    <th class="num">Total Sistem</th><th class="num">Fisik Checker</th><th class="num">Snapshot Gudang</th><th class="num">Sales Invoice</th><th class="num">Sistem Setelah Sales</th><th class="num">Pending GT</th><th class="num">Stok Validasi</th>
+                    <th>No Sales Invoice</th><th>No Good Transfer</th><th class="num">Alokasi Fisik</th><th class="num">Selisih</th><th>Hasil</th><th>Checker</th><th>Komentar Checker</th><th>Validator</th><th>Catatan Validasi</th>
                 </tr>
             </thead>
             <tbody>
@@ -123,18 +94,13 @@
                     $validationSystem = (float)($row->validation_system_qty ?? ($adjustedSystem + $pendingTransferQty));
                     $warehousePhysical = (float)($row->warehouse_physical_qty ?? 0);
                     $variance = $warehousePhysical - $validationSystem;
-                    $invoiceDetails = is_array($row->sales_invoice_details ?? null)
-                        ? $row->sales_invoice_details
-                        : json_decode((string)($row->sales_invoice_details ?? ''), true);
-                    $invoiceNumbers = collect(is_array($invoiceDetails) ? $invoiceDetails : [])
-                        ->pluck('invoice_number')->filter()->unique()->implode(', ');
-                    $transferDetails = is_array($row->pending_transfer_details ?? null)
-                        ? $row->pending_transfer_details
-                        : json_decode((string)($row->pending_transfer_details ?? ''), true);
-                    $transferNumbers = collect(is_array($transferDetails) ? $transferDetails : [])
-                        ->pluck('mutation_number')->filter()->unique()->implode(', ');
+                    $rowTone = $variance < -0.0001 ? 'ws-history-short' : ($variance > 0.0001 ? 'ws-history-over' : 'ws-history-match');
+                    $invoiceDetails = is_array($row->sales_invoice_details ?? null) ? $row->sales_invoice_details : json_decode((string)($row->sales_invoice_details ?? ''), true);
+                    $invoiceNumbers = collect(is_array($invoiceDetails) ? $invoiceDetails : [])->pluck('invoice_number')->filter()->unique()->implode(', ');
+                    $transferDetails = is_array($row->pending_transfer_details ?? null) ? $row->pending_transfer_details : json_decode((string)($row->pending_transfer_details ?? ''), true);
+                    $transferNumbers = collect(is_array($transferDetails) ? $transferDetails : [])->pluck('mutation_number')->filter()->unique()->implode(', ');
                 @endphp
-                <tr>
+                <tr class="{{ $rowTone }}">
                     <td>{{ $row->closed_at ? \Carbon\Carbon::parse($row->closed_at)->format('d/m/Y H:i') : '-' }}</td>
                     <td><strong>{{ $row->cycle_no }}</strong><small>Line #{{ $row->line_no }}</small></td>
                     <td>{{ $row->location }}</td>
@@ -142,18 +108,18 @@
                     <td><strong>{{ $row->warehouse_code }}</strong><small>{{ $row->warehouse_name }}</small></td>
                     <td><strong>{{ $row->item_code }}</strong><small>{{ $row->item_name }}</small></td>
                     <td>{{ $row->uom_code }}</td>
-                    <td class="num">{{ number_format((float)$row->total_system_qty,4,'.',',') }}</td>
-                    <td class="num">{{ number_format((float)$row->checker_physical_total,4,'.',',') }}</td>
-                    <td class="num">{{ number_format($warehouseSystem,4,'.',',') }}</td>
-                    <td class="num {{ $salesInvoiceQty > 0 ? 'negative' : '' }}">{{ number_format($salesInvoiceQty,4,'.',',') }}</td>
-                    <td class="num">{{ number_format($adjustedSystem,4,'.',',') }}</td>
-                    <td class="num {{ $pendingTransferQty > 0 ? 'positive' : '' }}">{{ number_format($pendingTransferQty,4,'.',',') }}</td>
-                    <td class="num">{{ number_format($validationSystem,4,'.',',') }}</td>
+                    <td class="num">{{ $fmtQty($row->total_system_qty) }}</td>
+                    <td class="num">{{ $fmtQty($row->checker_physical_total) }}</td>
+                    <td class="num">{{ $fmtQty($warehouseSystem) }}</td>
+                    <td class="num {{ $salesInvoiceQty > 0 ? 'negative' : '' }}">{{ $fmtQty($salesInvoiceQty) }}</td>
+                    <td class="num">{{ $fmtQty($adjustedSystem) }}</td>
+                    <td class="num {{ $pendingTransferQty > 0 ? 'positive' : '' }}">{{ $fmtQty($pendingTransferQty) }}</td>
+                    <td class="num">{{ $fmtQty($validationSystem) }}</td>
                     <td class="ws-history-comment">{{ $invoiceNumbers ?: '-' }}</td>
                     <td class="ws-history-comment">{{ $transferNumbers ?: '-' }}</td>
-                    <td class="num">{{ number_format($warehousePhysical,4,'.',',') }}</td>
-                    <td class="num {{ $variance < 0 ? 'negative' : ($variance > 0 ? 'positive' : '') }}">{{ number_format($variance,4,'.',',') }}</td>
-                    <td><span class="ws-history-result {{ strtolower((string)$row->warehouse_result) }}">{{ $row->warehouse_result==='MATCH' ? 'COCOK' : ($row->warehouse_result==='MISMATCH' ? 'SELISIH' : '-') }}</span></td>
+                    <td class="num">{{ $fmtQty($warehousePhysical) }}</td>
+                    <td class="num {{ $variance < 0 ? 'negative' : ($variance > 0 ? 'positive' : '') }}">{{ $fmtQty($variance) }}</td>
+                    <td><span class="ws-history-result {{ strtolower((string)$row->warehouse_result) }}">{{ $row->warehouse_result==='MATCH' ? 'COCOK' : ($variance > 0 ? 'LEBIH' : ($variance < 0 ? 'KURANG' : '-')) }}</span></td>
                     <td>{{ $row->checker_name ?? '-' }}<small>{{ $row->checked_at ? \Carbon\Carbon::parse($row->checked_at)->format('d/m/Y H:i') : '' }}</small></td>
                     <td class="ws-history-comment">{{ $row->checker_comment ?: '-' }}</td>
                     <td>{{ $row->validator_name ?? '-' }}<small>{{ $row->validated_at ? \Carbon\Carbon::parse($row->validated_at)->format('d/m/Y H:i') : '' }}</small></td>

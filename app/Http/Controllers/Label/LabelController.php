@@ -43,11 +43,12 @@ class LabelController extends Controller
 
         $qty = (int) $validated['qty'];
         $qrValue = QrPayload::make($item->code, $qty);
+        $labelSize = $validated['label_size'];
 
         $printedAt = now();
         $user = $request->user();
         $printedBy = $user?->name ?: $user?->username ?: '-';
 
-        return view('label.print', compact('item', 'qty', 'qrValue', 'printedAt', 'printedBy'));
+        return view('label.print', compact('item', 'qty', 'qrValue', 'labelSize', 'printedAt', 'printedBy'));
     }
 }

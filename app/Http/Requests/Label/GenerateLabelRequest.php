@@ -15,6 +15,8 @@ class GenerateLabelRequest extends FormRequest
     {
         $this->merge([
             'item_code' => trim((string) $this->input('item_code')),
+            // Pertahankan format 10x10 untuk pemanggil lama yang belum mengirim label_size.
+            'label_size' => $this->input('label_size', '10x10'),
         ]);
     }
 
@@ -26,6 +28,7 @@ class GenerateLabelRequest extends FormRequest
         return [
             'item_code' => ['required', 'string', 'max:100'],
             'qty' => ['required', 'integer', 'min:1', 'max:999999'],
+            'label_size' => ['required', 'in:10x10,4x3'],
         ];
     }
 
@@ -41,6 +44,8 @@ class GenerateLabelRequest extends FormRequest
             'qty.integer' => 'Qty harus berupa angka bulat.',
             'qty.min' => 'Qty minimal 1.',
             'qty.max' => 'Qty maksimal 999999.',
+            'label_size.required' => 'Ukuran label wajib dipilih.',
+            'label_size.in' => 'Pilih ukuran label 10 × 10 cm atau 4 × 3 cm.',
         ];
     }
 }

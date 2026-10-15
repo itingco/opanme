@@ -423,11 +423,11 @@ Route::middleware(['auth', 'role:CHECKER_GERAI,GERAI'])
 |--------------------------------------------------------------------------
 |
 | Label digabung ke dalam aplikasi Stock Opname.
-| Hanya dapat diakses oleh role ADMIN_GUDANG.
+| Hanya dapat diakses oleh role ADMIN.
 |
 */
 
-Route::middleware(['auth', 'role:ADMIN_GUDANG'])
+Route::middleware(['auth', 'role:ADMIN'])
     ->prefix('label')
     ->name('label.')
     ->group(function () {

@@ -1,0 +1,23 @@
+.ws-accordion{border:1px solid #dde3ed;border-radius:13px;overflow:hidden;background:#fff}
+.ws-accordion>summary{cursor:pointer;display:flex;align-items:center;gap:12px;padding:12px 16px;list-style:none;background:#f8fafc}
+.ws-accordion>summary::-webkit-details-marker{display:none}
+.ws-accordion>summary:before{content:'▸';font-size:16px;flex:0 0 auto;color:#475467;transition:transform .12s}
+.ws-accordion[open]>summary:before{transform:rotate(90deg)}
+.ws-accordion>summary .ws-admin-item-head{padding:0;margin:0;flex:1;min-width:0}
+.ws-accordion>summary .ws-admin-item-head strong{overflow-wrap:anywhere}
+.ws-accordion-body{padding:12px 15px 18px}
+.ws-accordion--mismatch>summary{background:#fff5f2;border-left:4px solid #d92d20}
+.ws-accordion--match>summary{background:#f4fcf7;border-left:4px solid #079455}
+.ws-accordion--pending>summary{background:#f6f7fa}
+.ws-accordion-select{display:flex;align-items:center;gap:6px;flex:0 0 auto;font-size:11px;line-height:1.2;font-weight:700;color:#344054}
+.ws-accordion-select input{width:17px;height:17px;accent-color:#175cd3}
+.ws-bulk-bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:14px;border:1px solid #cbd5e1;border-radius:12px;background:#f5f8fc;margin-bottom:14px}
+.ws-bulk-bar .btn{min-height:38px}
+.ws-bulk-count{font-size:12px;font-weight:700;margin-right:auto}
+.ws-bulk-hint{width:100%;font-size:11px;color:#475467}
+.ws-override-panel{margin-top:12px;padding:12px;border:1px solid #9bbdf6;border-radius:10px;background:#eff7ff}
+.ws-override-panel label{display:grid;gap:6px;font-weight:750;font-size:12px}
+.ws-override-panel input{font:inherit;border:1px solid #a0acc1;background:white;border-radius:7px;min-height:38px;max-width:220px;padding:7px 10px}
+.ws-override-panel small{display:block;margin-top:7px;color:#475467;font-size:11px}
+.ws-override-panel strong{font-size:13px}
+@media(max-width:700px){.ws-accordion>summary{flex-wrap:wrap;padding:10px}.ws-accordion>summary .ws-admin-item-head{width:100%;order:3}.ws-bulk-bar{gap:6px}.ws-accordion-body{padding:10px}}

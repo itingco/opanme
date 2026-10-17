@@ -96,13 +96,27 @@ class BarcodeImportService
 
         $existingByBarcode = [];
 
-        foreach (array_chunk(array_keys($payloadByBarcode), self::LOOKUP_CHUNK_SIZE) as $barcodeChunk) {
+        // Important: PHP turns numeric-string array KEYS into integers when
+        // array_keys() is called. For SQL Server, integer query bindings make it
+        // attempt to CONVERT the NVARCHAR Barcode column into INT, causing
+        // SQLSTATE[22003] for 13/14-digit barcodes. Force string query VALUES.
+        $barcodeValues = array_map(
+            static fn (int|string $barcode): string => (string) $barcode,
+            array_keys($payloadByBarcode)
+        );
+
+        foreach (array_chunk($barcodeValues, self::LOOKUP_CHUNK_SIZE) as $barcodeChunk) {
             $existingRows = ItemBarcode::query()
                 ->whereIn('barcode', $barcodeChunk)
                 ->get(['barcode', 'item_code', 'uom_code']);
 
             foreach ($existingRows as $existingRow) {
-                $existingByBarcode[(string) $existingRow->barcode] = $existingRow;
+                // Existing SQL Server NVARCHAR entries may be right-padded with
+                // spaces. Compare normalized text, just like uploaded Excel.
+                $existingBarcode = $this->normalizeBarcode((string) $existingRow->barcode);
+                if ($existingBarcode !== '') {
+                    $existingByBarcode[$existingBarcode] = $existingRow;
+                }
             }
         }
 

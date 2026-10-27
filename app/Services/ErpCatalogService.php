@@ -31,6 +31,63 @@ class ErpCatalogService
     }
 
     /**
+     * Resolve an ItemCode directly to its base (UOM level 1) ERP item.
+     * Used by QR payloads KODEBARANG-QTY, which intentionally bypass the
+     * barcode master because the QR already contains the ItemCode.
+     */
+    public function findItemByCode(string $sourceDatabase, string $itemCode): ?array
+    {
+        $itemCode = strtoupper(trim($itemCode));
+        if ($itemCode === '') {
+            return null;
+        }
+
+        $cacheKey = 'erp_item_code:'.strtoupper($sourceDatabase).':'.sha1($itemCode);
+        $cached = Cache::get($cacheKey);
+        if (is_array($cached)) {
+            return $cached;
+        }
+
+        $connection = $this->resolver->connectionName($sourceDatabase);
+        $rows = DB::connection($connection)->select(<<<'SQL'
+            SELECT TOP (2)
+                I.ItemID,
+                I.ItemCode,
+                I.ItemName,
+                CAST(1 AS int) AS UOMLevel,
+                U.UOMCode
+            FROM IC_Items I WITH (NOLOCK)
+            LEFT JOIN IC_UOM U WITH (NOLOCK)
+                ON U.UOMID = I.UOMID1
+            WHERE UPPER(LTRIM(RTRIM(I.ItemCode))) = ?
+            ORDER BY I.ItemID
+        SQL, [$itemCode]);
+
+        if (count($rows) === 0) {
+            return null;
+        }
+
+        if (count($rows) > 1) {
+            throw new UnexpectedValueException(
+                "ItemCode {$itemCode} ditemukan lebih dari satu kali di ERP. Hubungi Admin."
+            );
+        }
+
+        $row = $rows[0];
+        $item = [
+            'item_id' => (int) $row->ItemID,
+            'item_code' => (string) $row->ItemCode,
+            'item_name' => (string) $row->ItemName,
+            'uom_level' => 1,
+            'uom_code' => trim((string) ($row->UOMCode ?? '')) ?: 'PCS',
+        ];
+
+        Cache::put($cacheKey, $item, now()->addHours(8));
+
+        return $item;
+    }
+
+    /**
      * Resolve a local ItemCode + UOM mapping to the ERP ItemID/UOMLevel for
      * the database selected by the stock-opname cycle.
      */

@@ -10,6 +10,7 @@ use App\Models\SampleCycleItemStock;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
@@ -17,9 +18,18 @@ class CheckerSamplingController extends Controller
 {
     public function index(Request $request): View
     {
+        $userId = (int) $request->user()->id;
+
         $periods = SampleCycle::query()
             ->where('cycle_type', SampleCycle::TYPE_WAREHOUSE)
-            ->where('assigned_checker_id', $request->user()->id)
+            ->when(
+                Schema::hasTable('sample_cycle_checkers'),
+                fn ($query) => $query->where(function ($assigned) use ($userId): void {
+                    $assigned->where('assigned_checker_id', $userId)
+                        ->orWhereHas('checkers', fn ($checkers) => $checkers->where('users.id', $userId));
+                }),
+                fn ($query) => $query->where('assigned_checker_id', $userId)
+            )
             ->whereIn('status', [SampleCycle::STATUS_OPEN, SampleCycle::STATUS_CLOSED])
             ->withCount([
                 'warehouses',
@@ -46,6 +56,7 @@ class CheckerSamplingController extends Controller
         ]);
 
         $items = $sampleCycle->items()
+            ->with('checker:id,name')
             ->withCount('stocks')
             ->orderBy('line_no')
             ->get();
@@ -81,6 +92,19 @@ class CheckerSamplingController extends Controller
                 ->lockForUpdate()
                 ->findOrFail($sampleCycleItem->id);
 
+            // In a multi-checker period, do not let one checker silently overwrite
+            // another checker's draft. The checker who first fills the item owns
+            // that draft until finalization.
+            if (
+                $item->physical_qty !== null
+                && $item->checked_by !== null
+                && (int) $item->checked_by !== (int) $request->user()->id
+            ) {
+                throw ValidationException::withMessages([
+                    'physical_qty' => 'Item ini sedang/sudah diisi oleh checker lain. Pilih item lain agar draft checker tidak saling tertimpa.',
+                ]);
+            }
+
             $item->update([
                 'physical_qty' => (int) $data['physical_qty'],
                 'checker_comment' => trim((string) ($data['checker_comment'] ?? '')) ?: null,
@@ -101,7 +125,7 @@ class CheckerSamplingController extends Controller
                 ]);
         });
 
-        return back()->with('success', 'Item #'.$sampleCycleItem->line_no.' '.$sampleCycleItem->item_code.' disimpan sebagai DRAFT. Nilai masih dapat diedit sebelum finalisasi.');
+        return back()->with('success', 'Item #'.$sampleCycleItem->line_no.' '.$sampleCycleItem->item_code.' disimpan sebagai DRAFT. Nilai masih dapat diedit oleh checker yang mengisi item tersebut sebelum finalisasi.');
     }
 
     /** Lock all item drafts after every item has a physical quantity. */
@@ -152,7 +176,7 @@ class CheckerSamplingController extends Controller
             }
         });
 
-        return back()->with('success', 'Semua draft Qty Fisik sudah DIFINALISASI. Data checker sekarang terkunci dan tidak dapat diedit lagi.');
+        return back()->with('success', 'Semua draft Qty Fisik tim checker sudah DIFINALISASI. Data sekarang terkunci dan tidak dapat diedit lagi.');
     }
 
     /** Old batch endpoint intentionally disabled after switching to modal per item. */
@@ -173,6 +197,6 @@ class CheckerSamplingController extends Controller
     private function assertAssigned(Request $request, SampleCycle $cycle): void
     {
         abort_unless($cycle->isWarehouseSampling(), 404);
-        abort_unless((int) $cycle->assigned_checker_id === (int) $request->user()->id, 403);
+        abort_unless($cycle->isAssignedChecker((int) $request->user()->id), 403);
     }
 }

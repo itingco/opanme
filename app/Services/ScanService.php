@@ -11,8 +11,10 @@ use App\Models\StockOpnameCycle;
 use App\Models\StockOpnameDiscoveredItem;
 use App\Models\UomRatio;
 use App\Models\User;
+use App\Support\ScanCode;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+use InvalidArgumentException;
 use UnexpectedValueException;
 
 class ScanService
@@ -31,6 +33,18 @@ class ScanService
         }
 
         $this->assertActiveAssignedSession($checker, $session);
+
+        // Global scan rule: payload with "-" is KODEBARANG-QTY and must be
+        // resolved directly by ItemCode. Only values without "-" use barcode master.
+        try {
+            $qr = ScanCode::parseQrPayload($barcode);
+        } catch (InvalidArgumentException $e) {
+            throw ValidationException::withMessages(['barcode' => $e->getMessage()]);
+        }
+
+        if ($qr !== null) {
+            return $this->scanQrPayload($checker, $session, $barcode, $qr);
+        }
 
         $mapping = ItemBarcode::query()
             ->where('barcode', $barcode)
@@ -125,6 +139,18 @@ class ScanService
 
         $this->assertActiveAssignedSession($checker, $session);
 
+        try {
+            $qr = ScanCode::parseQrPayload($barcode);
+        } catch (InvalidArgumentException $e) {
+            throw ValidationException::withMessages(['barcode' => $e->getMessage()]);
+        }
+
+        if ($qr !== null) {
+            throw ValidationException::withMessages([
+                'barcode' => 'Nilai dengan tanda "-" adalah QR KODEBARANG-QTY dan harus diproses melalui scan normal, bukan Non-System.',
+            ]);
+        }
+
         $mapping = ItemBarcode::query()->where('barcode', $barcode)->first();
         if ($mapping) {
             throw ValidationException::withMessages([
@@ -215,6 +241,62 @@ class ScanService
             'smallest_uom_code' => $scan->smallest_uom_code,
             'physical_qty' => number_format((float) $scan->physical_qty, 4, '.', ''),
             'scanned_at' => $scan->scanned_at?->format('H:i:s'),
+        ];
+    }
+
+    /**
+     * @param array{raw:string,item_code:string,qty:int} $qr
+     */
+    private function scanQrPayload(User $checker, ScanSession $session, string $rawValue, array $qr): array
+    {
+        try {
+            $item = $this->catalog->findItemByCode(
+                $session->cycle->source_database,
+                $qr['item_code']
+            );
+        } catch (UnexpectedValueException $e) {
+            throw ValidationException::withMessages(['barcode' => $e->getMessage()]);
+        }
+
+        if (! $item) {
+            throw ValidationException::withMessages([
+                'barcode' => "Kode barang {$qr['item_code']} dari QR tidak ditemukan di ERP {$session->cycle->source_database}.",
+            ]);
+        }
+
+        $qty = (float) $qr['qty'];
+        $transaction = DB::transaction(function () use ($checker, $session, $rawValue, $item, $qty): ScanTransaction {
+            $cycle = StockOpnameCycle::query()->sharedLock()->findOrFail($session->cycle_id);
+            if ($cycle->status !== StockOpnameCycle::STATUS_OPEN) {
+                throw ValidationException::withMessages(['barcode' => 'Cycle stock opname sudah ditutup.']);
+            }
+
+            return ScanTransaction::create([
+                'cycle_id' => $session->cycle_id,
+                'scan_session_id' => $session->id,
+                'warehouse_id' => $session->warehouse_id,
+                'checker_id' => $checker->id,
+                'location' => $session->location,
+                'alias_code' => $rawValue,
+                'item_id' => $item['item_id'],
+                'item_code' => $item['item_code'],
+                'item_name' => $item['item_name'],
+                'uom_level' => $item['uom_level'],
+                'uom_code' => $item['uom_code'],
+                'ratio_used' => 1,
+                'physical_qty' => $qty,
+                'scanned_at' => now(),
+            ]);
+        });
+
+        return [
+            'ok' => true,
+            'qr_payload' => true,
+            'qty' => number_format($qty, 4, '.', ''),
+            'item_code' => $transaction->item_code,
+            'item_name' => $transaction->item_name,
+            'uom_code' => $transaction->uom_code,
+            'scanned_at' => $transaction->scanned_at?->format('H:i:s'),
         ];
     }
 

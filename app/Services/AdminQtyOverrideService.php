@@ -10,6 +10,7 @@ use App\Models\WarehouseCheckDetail;
 use App\Models\WarehouseCheckHeader;
 use App\Models\WarehouseCheckOverride;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class AdminQtyOverrideService
 {
@@ -68,17 +69,14 @@ class AdminQtyOverrideService
                     'completed_at' => now(),
                 ];
 
-                // Jika ratio dokumen tersedia, progress base ikut disesuaikan.
-                // Jika NO RATIO, qty override tetap tersimpan dalam UOM dokumen
-                // pada record override dan baris tetap dapat difinalisasi.
                 if ($overrideBaseQty !== null) {
                     $lineUpdate['scanned_base_qty'] = $overrideBaseQty;
                 }
 
                 $locked->update($lineUpdate);
 
-                WarehouseCheckOverride::query()->updateOrCreate(
-                    ['check_detail_id' => $locked->id],
+                $values = $this->compatibleOverrideValues(
+                    'warehouse_check_overrides',
                     [
                         'check_header_id' => $header->id,
                         'supervisor_user_id' => $otp->supervisor_user_id,
@@ -86,11 +84,20 @@ class AdminQtyOverrideService
                         'admin_user_id' => $admin->id,
                         'otp_id' => $otp->id,
                         'reason_code' => 'ADMIN_QTY_OVERRIDE',
-                        'reason_note' => $reasonNote,
+                        'reason_note' => $this->legacyAdminAuditNote(
+                            'warehouse_check_overrides',
+                            $reasonNote,
+                            $admin
+                        ),
                         'override_qty' => $overrideQty,
                         'override_base_qty' => $overrideBaseQty,
                         'overridden_at' => now(),
                     ]
+                );
+
+                WarehouseCheckOverride::query()->updateOrCreate(
+                    ['check_detail_id' => $locked->id],
+                    $values
                 );
 
                 return $locked->fresh();
@@ -154,8 +161,8 @@ class AdminQtyOverrideService
 
                 $locked->update($lineUpdate);
 
-                GoodTransferCheckOverride::query()->updateOrCreate(
-                    ['check_detail_id' => $locked->id],
+                $values = $this->compatibleOverrideValues(
+                    'good_transfer_check_overrides',
                     [
                         'check_header_id' => $header->id,
                         'supervisor_user_id' => $otp->supervisor_user_id,
@@ -163,11 +170,20 @@ class AdminQtyOverrideService
                         'admin_user_id' => $admin->id,
                         'otp_id' => $otp->id,
                         'reason_code' => 'ADMIN_QTY_OVERRIDE',
-                        'reason_note' => $reasonNote,
+                        'reason_note' => $this->legacyAdminAuditNote(
+                            'good_transfer_check_overrides',
+                            $reasonNote,
+                            $admin
+                        ),
                         'override_qty' => $overrideQty,
                         'override_base_qty' => $overrideBaseQty,
                         'overridden_at' => now(),
                     ]
+                );
+
+                GoodTransferCheckOverride::query()->updateOrCreate(
+                    ['check_detail_id' => $locked->id],
+                    $values
                 );
 
                 return $locked->fresh();
@@ -175,9 +191,41 @@ class AdminQtyOverrideService
         );
     }
 
+    /**
+     * Old DB_AppHub installations do not always have the three newer columns.
+     * Do not include a missing column in INSERT/UPDATE, otherwise SQL Server
+     * raises "Invalid column name 'admin_user_id'" as seen in production.
+     */
+    private function compatibleOverrideValues(string $table, array $values): array
+    {
+        foreach (['admin_user_id', 'override_qty', 'override_base_qty'] as $column) {
+            if (! Schema::connection('apphub')->hasColumn($table, $column)) {
+                unset($values[$column]);
+            }
+        }
+
+        return $values;
+    }
+
+    /**
+     * If legacy schema has no admin_user_id, preserve the admin identity in the
+     * note so audit information is not completely lost.
+     */
+    private function legacyAdminAuditNote(string $table, ?string $reasonNote, User $admin): ?string
+    {
+        if (Schema::connection('apphub')->hasColumn($table, 'admin_user_id')) {
+            return $reasonNote;
+        }
+
+        $audit = '[Admin '.$admin->name.' #'.$admin->id.']';
+        $note = trim($audit.' '.trim((string) $reasonNote));
+
+        return substr($note, 0, 500);
+    }
+
     private function assertAdmin(User $admin): void
     {
-        if ($admin->role !== 'admin' || !$admin->is_active) {
+        if ($admin->role !== 'admin' || ! $admin->is_active) {
             throw new \RuntimeException(
                 'Hanya admin aktif yang dapat melakukan Qty Override.'
             );
@@ -188,14 +236,14 @@ class AdminQtyOverrideService
     {
         if ($status !== 'DRAFT') {
             throw new \RuntimeException(
-                $document . ' harus berstatus DRAFT untuk Qty Override.'
+                $document.' harus berstatus DRAFT untuk Qty Override.'
             );
         }
     }
 
     private function normalizeQty(float $qty): float
     {
-        if (!is_finite($qty) || $qty < 0) {
+        if (! is_finite($qty) || $qty < 0) {
             throw new \RuntimeException('Qty Override harus 0 atau lebih besar.');
         }
 

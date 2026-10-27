@@ -6,9 +6,11 @@ use App\Models\ItemBarcode;
 use App\Models\SampleCheck;
 use App\Models\SampleCycle;
 use App\Models\User;
+use App\Support\ScanCode;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+use InvalidArgumentException;
 use Throwable;
 use UnexpectedValueException;
 
@@ -28,25 +30,49 @@ class SampleCheckingService
             throw ValidationException::withMessages(['barcode' => 'Barcode wajib diisi.']);
         }
 
-        $mapping = ItemBarcode::query()->where('barcode', $barcode)->first();
-        if (! $mapping) {
-            throw ValidationException::withMessages(['barcode' => 'Barcode tidak ditemukan di DB_AppHub.']);
-        }
-
         try {
-            $item = $this->catalog->findItemByCodeAndUom(
-                $cycle->source_database,
-                (string) $mapping->item_code,
-                (string) $mapping->uom_code
-            );
-        } catch (UnexpectedValueException $e) {
+            $qr = ScanCode::parseQrPayload($barcode);
+        } catch (InvalidArgumentException $e) {
             throw ValidationException::withMessages(['barcode' => $e->getMessage()]);
         }
 
-        if (! $item) {
-            throw ValidationException::withMessages([
-                'barcode' => "Barcode {$barcode} mengarah ke {$mapping->item_code} / {$mapping->uom_code}, tetapi item/UOM tidak ditemukan di ERP {$cycle->source_database}.",
-            ]);
+        if ($qr !== null) {
+            try {
+                $item = $this->catalog->findItemByCode(
+                    $cycle->source_database,
+                    $qr['item_code']
+                );
+            } catch (UnexpectedValueException $e) {
+                throw ValidationException::withMessages(['barcode' => $e->getMessage()]);
+            }
+
+            if (! $item) {
+                throw ValidationException::withMessages([
+                    'barcode' => "Kode barang {$qr['item_code']} dari QR tidak ditemukan di ERP {$cycle->source_database}.",
+                ]);
+            }
+        } else {
+            // Only values without a dash are allowed to use barcode master lookup.
+            $mapping = ItemBarcode::query()->where('barcode', $barcode)->first();
+            if (! $mapping) {
+                throw ValidationException::withMessages(['barcode' => 'Barcode tidak ditemukan di DB_AppHub.']);
+            }
+
+            try {
+                $item = $this->catalog->findItemByCodeAndUom(
+                    $cycle->source_database,
+                    (string) $mapping->item_code,
+                    (string) $mapping->uom_code
+                );
+            } catch (UnexpectedValueException $e) {
+                throw ValidationException::withMessages(['barcode' => $e->getMessage()]);
+            }
+
+            if (! $item) {
+                throw ValidationException::withMessages([
+                    'barcode' => "Barcode {$barcode} mengarah ke {$mapping->item_code} / {$mapping->uom_code}, tetapi item/UOM tidak ditemukan di ERP {$cycle->source_database}.",
+                ]);
+            }
         }
 
         if (SampleCheck::query()->where('sample_cycle_id', $cycle->id)->where('item_id', $item['item_id'])->exists()) {
@@ -86,6 +112,7 @@ class SampleCheckingService
             'item_name' => (string) $item['item_name'],
             'uom_code' => (string) $item['uom_code'],
             'system_qty' => $systemQty,
+            'qr_qty' => $qr['qty'] ?? null,
             'expires_at' => now()->addMinutes(3)->timestamp,
         ];
 
@@ -98,6 +125,7 @@ class SampleCheckingService
             'item_name' => $payload['item_name'],
             'uom_code' => $payload['uom_code'],
             'system_qty' => number_format((float) $systemQty, 4, '.', ''),
+            'qr_qty' => $payload['qr_qty'],
             'warehouse_code' => $cycle->warehouse_code,
             'warehouse_name' => $cycle->warehouse_name,
             'location' => $cycle->location,

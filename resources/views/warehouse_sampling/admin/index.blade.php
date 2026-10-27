@@ -18,7 +18,7 @@
         <div class="ws-home-panel-head">
             <div>
                 <h2>Buat Periode Multi-Gudang</h2>
-                <p class="ws-note">Pilih gudang, tentukan checker, lalu buat periode sampling.</p>
+                <p class="ws-note">Pilih gudang, pilih satu atau lebih checker, lalu buat periode sampling.</p>
             </div>
         </div>
         <p class="ws-note ws-create-description">Pilih satu atau lebih gudang dari AS_INGCO / AS_SMI. Stok setiap gudang akan disnapshot terpisah saat item dipilih.</p>
@@ -33,7 +33,7 @@
                 <div class="ws-picker-head">
                     <div>
                         <strong>Database & Gudang yang Digabung</strong>
-                        <small>Checker akan menghitung fisik gabungan dari seluruh gudang yang dipilih.</small>
+                        <small>Tim checker akan menghitung fisik gabungan dari seluruh gudang yang dipilih.</small>
                     </div>
                     <span class="ws-selected-warehouse-count"><b id="ws-selected-warehouse-count">0</b> gudang dipilih</span>
                 </div>
@@ -43,21 +43,32 @@
                 </div>
             </div>
 
+            @php
+                $oldCheckerIds = collect((array) old('assigned_checker_ids', []))
+                    ->map(fn($id) => (string) $id)
+                    ->filter()
+                    ->values();
+                if ($oldCheckerIds->isEmpty() && old('assigned_checker_id')) {
+                    $oldCheckerIds = collect([(string) old('assigned_checker_id')]);
+                }
+            @endphp
+
             <div class="ws-form-grid">
                 <label>
                     Target Checker (%)
                     <input name="target_percentage" type="number" min="1" max="100" step="0.01" value="{{ old('target_percentage',100) }}" required>
                 </label>
                 <label>
-                    Checker Gudang
-                    <select name="assigned_checker_id" required>
-                        <option value="">Pilih checker</option>
+                    Checker Gudang (bisa lebih dari 2)
+                    <select name="assigned_checker_ids[]" id="ws-assigned-checkers" multiple size="6" required>
                         @foreach($checkers as $checker)
-                            <option value="{{ $checker->id }}" @selected((string)old('assigned_checker_id')===(string)$checker->id)>
+                            <option value="{{ $checker->id }}" @selected($oldCheckerIds->contains((string)$checker->id))>
                                 {{ $checker->name }} · {{ $checker->username }}
                             </option>
                         @endforeach
                     </select>
+                    <small class="ws-note">Pilih semua checker yang boleh mengerjakan periode yang sama. Checker pertama menjadi checker utama untuk kompatibilitas report lama.</small>
+                    <input type="hidden" name="assigned_checker_id" id="ws-primary-checker" value="{{ $oldCheckerIds->first() ?? '' }}">
                 </label>
             </div>
 
@@ -116,7 +127,7 @@
 
                 <div>
                     <div class="ws-progress {{ $reached ? 'target-reached':'' }}"><span style="width:{{ $pct }}%"></span></div>
-                    <small class="ws-note">Progress checker {{ number_format($pct,1) }}% · target {{ number_format((float)$period->target_percentage,0) }}% ({{ $targetCount }} item) · {{ $period->checker?->name ?? '-' }}</small>
+                    <small class="ws-note">Progress checker {{ number_format($pct,1) }}% · target {{ number_format((float)$period->target_percentage,0) }}% ({{ $targetCount }} item) · checker utama {{ $period->checker?->name ?? '-' }}</small>
                 </div>
 
                 <a class="btn" href="{{ route('warehouse.admin.show',$period) }}">Kelola & Validasi</a>
@@ -134,6 +145,26 @@
 @push('scripts')
 <script>
 document.addEventListener('DOMContentLoaded', async () => {
+    const checkerSelect = document.getElementById('ws-assigned-checkers');
+    const primaryChecker = document.getElementById('ws-primary-checker');
+    const createForm = document.getElementById('ws-create-form');
+
+    const syncPrimaryChecker = () => {
+        if (!checkerSelect || !primaryChecker) return;
+        const selected = [...checkerSelect.selectedOptions];
+        primaryChecker.value = selected[0]?.value || '';
+    };
+
+    checkerSelect?.addEventListener('change', syncPrimaryChecker);
+    createForm?.addEventListener('submit', (event) => {
+        syncPrimaryChecker();
+        if (!primaryChecker?.value) {
+            event.preventDefault();
+            checkerSelect?.focus();
+        }
+    });
+    syncPrimaryChecker();
+
     const root = document.getElementById('ws-multi-warehouse-picker');
     if (!root) return;
 
@@ -220,22 +251,15 @@ document.addEventListener('DOMContentLoaded', async () => {
                 let visibleCount = 0;
                 section.querySelectorAll('.ws-warehouse-check').forEach(label => {
                     const show = term === '' || String(label.dataset.search || '').includes(term);
-
-                    // Do not rely only on the HTML `hidden` attribute here.
-                    // `.ws-warehouse-check` is explicitly rendered as a grid in our CSS,
-                    // which can override the browser's default hidden presentation.
-                    // This class is therefore the authoritative visual filter.
                     label.classList.toggle('ws-filter-hidden', !show);
                     label.hidden = !show;
                     label.setAttribute('aria-hidden', show ? 'false' : 'true');
-
                     if (show) visibleCount += 1;
                 });
                 visibleCounter.textContent = visibleCount;
                 emptyState.hidden = visibleCount !== 0;
                 clear.hidden = term === '';
 
-                // Start each filtered result from the top of its database list.
                 const optionsScroller = section.querySelector('.ws-warehouse-options');
                 if (optionsScroller) optionsScroller.scrollTop = 0;
 

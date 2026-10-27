@@ -3,7 +3,7 @@
 @section('page-class','ws-checker-mobile-page')
 @section('content')
 @push('styles')
-<link rel="stylesheet" href="{{ asset('assets/css/warehouse-sampling.css') }}?v=20261012integerqty">
+<link rel="stylesheet" href="{{ asset('assets/css/warehouse-sampling.css') }}?v=20261027multichecker">
 @endpush
 @php
     $total = (int) $period->items_count;
@@ -37,11 +37,11 @@
     </div>
     <div class="ws-progress"><span style="width:{{ $pct }}%"></span></div>
     <div class="ws-checker-progress-meta">
-        <p class="ws-note">{{ $filled }} / {{ $total }} item sudah memiliki draft Qty Fisik ({{ number_format($pct,1) }}%).</p>
+        <p class="ws-note">{{ $filled }} / {{ $total }} item sudah memiliki draft Qty Fisik ({{ number_format($pct,1) }}%). Periode ini dapat dikerjakan bersama checker lain.</p>
         @if($finalized)
             <span class="ws-badge open">FINAL · TERKUNCI</span>
         @elseif($period->isOpen())
-            <span class="ws-badge draft">DRAFT · BISA DIEDIT</span>
+            <span class="ws-badge draft">DRAFT · TIM CHECKER</span>
         @else
             <span class="ws-badge closed">CLOSED</span>
         @endif
@@ -51,14 +51,14 @@
 @if($finalized)
     <div class="ws-final-lock-note"><strong>Hasil checker sudah final.</strong> Semua Qty dan komentar dikunci. Admin Gudang dapat melanjutkan validasi.</div>
 @elseif($editable)
-    <div class="ws-lock-note"><strong>Klik kode barang untuk input.</strong> Qty Fisik menggunakan bilangan bulat tanpa desimal. Draft masih bisa diedit sampai Anda menekan <b>Finalisasi Semua Item</b>.</div>
+    <div class="ws-lock-note"><strong>Klik kode barang untuk input.</strong> Item yang sudah diisi checker lain akan terkunci untuk Anda supaya draft tidak saling tertimpa. Finalisasi dapat dilakukan setelah seluruh item terisi.</div>
 @endif
 
 <section class="panel ws-modal-input-panel">
     <div class="panel-head">
-        <div><h2>Daftar Item</h2><small>Klik kode item untuk isi / edit Qty Fisik dan komentar.</small></div>
+        <div><h2>Daftar Item</h2><small>Klik kode item yang belum diambil checker lain untuk isi / edit Qty Fisik dan komentar.</small></div>
         @if($editable)
-            <form method="POST" action="{{ route('warehouse.checker.finalize',$period) }}" onsubmit="return confirm('Finalisasi semua item? Setelah finalisasi Qty dan komentar tidak dapat diedit lagi.')">
+            <form method="POST" action="{{ route('warehouse.checker.finalize',$period) }}" onsubmit="return confirm('Finalisasi semua item tim checker? Setelah finalisasi Qty dan komentar tidak dapat diedit lagi.')">
                 @csrf
                 <button class="btn primary" type="submit" @disabled($filled < $total || $total === 0)>Finalisasi Semua Item</button>
             </form>
@@ -70,11 +70,16 @@
             <thead><tr><th>No</th><th>Kode Item</th><th>Nama Item</th><th>UOM</th><th class="num">Qty Fisik Draft</th><th>Komentar</th><th>Status</th></tr></thead>
             <tbody>
             @forelse($items as $item)
-                @php($hasDraft = $item->physical_qty !== null)
+                @php
+                    $hasDraft = $item->physical_qty !== null;
+                    $ownedByOther = $hasDraft
+                        && $item->checked_by !== null
+                        && (int)$item->checked_by !== (int)auth()->id();
+                @endphp
                 <tr class="{{ $finalized ? 'is-final' : ($hasDraft ? 'is-draft' : '') }}">
                     <td data-label="No"><strong>#{{ $item->line_no }}</strong></td>
                     <td data-label="Kode Item">
-                        @if($editable)
+                        @if($editable && !$ownedByOther)
                             <button type="button" class="ws-item-code-button"
                                 data-open-item-modal
                                 data-action="{{ route('warehouse.checker.check',[$period,$item]) }}"
@@ -86,15 +91,20 @@
                                 data-comment="{{ $item->checker_comment }}">{{ $item->item_code }}</button>
                         @else
                             <strong>{{ $item->item_code }}</strong>
+                            @if($ownedByOther)<small>Dikunci: {{ $item->checker?->name ?? 'checker lain' }}</small>@endif
                         @endif
                     </td>
                     <td data-label="Nama Item"><strong>{{ $item->item_name }}</strong><small>{{ $item->stocks_count }} gudang terkait</small></td>
                     <td data-label="UOM"><span class="ws-uom-pill">{{ $item->uom_code }}</span></td>
-                    <td data-label="Qty Fisik Draft" class="num"><strong>{{ $hasDraft ? $fmtQty($item->physical_qty) : '-' }}</strong></td>
+                    <td data-label="Qty Fisik Draft" class="num">
+                        <strong>{{ $hasDraft ? $fmtQty($item->physical_qty) : '-' }}</strong>
+                        @if($hasDraft && $item->checker)<small>{{ $item->checker->name }}</small>@endif
+                    </td>
                     <td data-label="Komentar"><div class="ws-table-comment-preview">{{ filled($item->checker_comment) ? $item->checker_comment : '-' }}</div></td>
                     <td data-label="Status">
                         @if($finalized)<span class="ws-badge open">FINAL</span>
-                        @elseif($hasDraft)<span class="ws-badge draft">DRAFT</span>
+                        @elseif($ownedByOther)<span class="ws-badge draft">DRAFT · CHECKER LAIN</span>
+                        @elseif($hasDraft)<span class="ws-badge draft">DRAFT SAYA</span>
                         @else<span class="ws-badge">BELUM</span>@endif
                     </td>
                 </tr>
@@ -107,7 +117,7 @@
 
     @if($editable)
         <div class="ws-modal-table-footer">
-            <span><strong>{{ $filled }} / {{ $total }}</strong> item sudah disimpan sebagai draft.</span>
+            <span><strong>{{ $filled }} / {{ $total }}</strong> item sudah disimpan sebagai draft oleh tim checker.</span>
             <span>{{ max(0,$total-$filled) }} item belum diisi.</span>
         </div>
     @endif
@@ -131,7 +141,7 @@
                 <textarea name="checker_comment" id="ws-item-modal-comment" rows="4" maxlength="1000" placeholder="Opsional: kondisi fisik, lokasi, kemasan, catatan..."></textarea>
             </label>
             <div class="ws-item-entry-actions"><button type="button" class="btn" data-item-modal-close>Batal</button><button type="submit" class="btn primary">Simpan Draft Item</button></div>
-            <small class="ws-note">Menyimpan draft tidak mengunci data. Klik kode item lagi jika ingin mengubah sebelum finalisasi.</small>
+            <small class="ws-note">Menyimpan draft tidak mengunci seluruh periode. Anda tetap dapat mengubah draft milik sendiri sebelum finalisasi.</small>
         </form>
     </section>
 </div>

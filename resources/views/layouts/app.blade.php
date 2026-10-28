@@ -13,12 +13,11 @@
 @auth
 @php
     $u = auth()->user();
-    if ($u->isAdmin()) $homeRoute = route('admin.dashboard');
-    elseif ($u->isAdminGerai()) $homeRoute = route('gerai.admin.home');
-    elseif ($u->isCheckerGerai() || $u->isLegacyGerai()) $homeRoute = route('gerai.checker.home');
-    elseif ($u->isAdminGudang()) $homeRoute = route('warehouse.admin.index');
-    elseif ($u->isCheckerGudang()) $homeRoute = route('warehouse.checker.index');
-    else $homeRoute = route('checker.home');
+    $menuPermission = app(\App\Services\MenuPermissionService::class);
+    $menuDefinitions = config('menu_permissions.menus', []);
+    $homeName = $menuPermission->firstAllowedRoute((string)$u->role);
+    $homeRoute = $homeName ? route($homeName) : route('password.edit');
+    $icons = ['dashboard'=>'⌂','gerai_admin'=>'◎','gerai_reports'=>'≡','gerai_checker'=>'▦','warehouse_admin'=>'▦','warehouse_history'=>'≡','warehouse_checker'=>'✓','warehouse_legacy'=>'◫','cycles'=>'◫','legacy_checker'=>'✓','barcodes'=>'▥','label'=>'▤','ratios'=>'⇄','users'=>'♙'];
 @endphp
 <div class="app-shell app-shell-sidebar" id="app-shell">
     <aside class="app-sidebar" id="app-sidebar" aria-label="Menu utama">
@@ -26,55 +25,36 @@
             <span class="brand-mark">SO</span>
             <span class="sidebar-brand-copy"><strong>Stock Opname</strong><small>{{ $u->role }}</small></span>
         </a>
-
         <nav class="sidebar-nav">
+            @foreach($menuDefinitions as $key => $menu)
+                @if($menuPermission->allowed((string)$u->role, $key) && \Illuminate\Support\Facades\Route::has($menu['route']))
+                    <a class="sidebar-link {{ collect($menu['match'])->contains(fn($pattern) => request()->routeIs($pattern)) ? 'active' : '' }}" href="{{ route($menu['route']) }}">
+                        <span class="sidebar-icon">{{ $icons[$key] ?? '▤' }}</span>
+                        <span class="sidebar-label">{{ $menu['label'] }}</span>
+                    </a>
+                @endif
+            @endforeach
             @if($u->isAdmin())
-                <a class="sidebar-link {{ request()->routeIs('admin.dashboard') ? 'active' : '' }}" href="{{ route('admin.dashboard') }}"><span class="sidebar-icon">⌂</span><span class="sidebar-label">Dashboard</span></a>
-                <a class="sidebar-link {{ request()->routeIs('gerai.admin.*') ? 'active' : '' }}" href="{{ route('gerai.admin.home') }}"><span class="sidebar-icon">◎</span><span class="sidebar-label">Admin Gerai</span></a>
-                <a class="sidebar-link {{ request()->routeIs('admin.sampling.*') ? 'active' : '' }}" href="{{ route('admin.sampling.index') }}"><span class="sidebar-icon">≡</span><span class="sidebar-label">Sampling Gerai Harian</span></a>
-                <a class="sidebar-link {{ request()->routeIs('warehouse.admin.*') ? 'active' : '' }}" href="{{ route('warehouse.admin.index') }}"><span class="sidebar-icon">▦</span><span class="sidebar-label">Admin Gudang</span></a>
-                <a class="sidebar-link {{ request()->routeIs('warehouse.history.*') ? 'active' : '' }}" href="{{ route('warehouse.history.index') }}"><span class="sidebar-icon">≡</span><span class="sidebar-label">History Gudang</span></a>
-                <a class="sidebar-link {{ request()->routeIs('admin.cycles.*') ? 'active' : '' }}" href="{{ route('admin.cycles.index') }}"><span class="sidebar-icon">◫</span><span class="sidebar-label">Cycle Opname Legacy</span></a>
-                <a class="sidebar-link {{ request()->routeIs('admin.barcodes.*') ? 'active' : '' }}" href="{{ route('admin.barcodes.index') }}"><span class="sidebar-icon">▥</span><span class="sidebar-label">Barcode</span></a>
-                <a class="sidebar-link {{ request()->routeIs('label.*') ? 'active' : '' }}" href="{{ route('label.index') }}"><span class="sidebar-icon">▤</span><span class="sidebar-label">Label</span></a>
-                <a class="sidebar-link {{ request()->routeIs('admin.ratios.*') ? 'active' : '' }}" href="{{ route('admin.ratios.index') }}"><span class="sidebar-icon">⇄</span><span class="sidebar-label">Ratio</span></a>
-                <a class="sidebar-link {{ request()->routeIs('admin.users.*') ? 'active' : '' }}" href="{{ route('admin.users.index') }}"><span class="sidebar-icon">♙</span><span class="sidebar-label">User & Akses</span></a>
-            @elseif($u->isAdminGerai())
-                <a class="sidebar-link {{ request()->routeIs('gerai.admin.home') || request()->routeIs('gerai.admin.create') ? 'active' : '' }}" href="{{ route('gerai.admin.home') }}"><span class="sidebar-icon">◎</span><span class="sidebar-label">Sampling Gerai</span></a>
-                <a class="sidebar-link {{ request()->routeIs('gerai.admin.sampling.*') ? 'active' : '' }}" href="{{ route('gerai.admin.sampling.index') }}"><span class="sidebar-icon">≡</span><span class="sidebar-label">Sampling Gerai Harian</span></a>
-            @elseif($u->isCheckerGerai() || $u->isLegacyGerai())
-                <a class="sidebar-link {{ request()->routeIs('gerai.checker.*') ? 'active' : '' }}" href="{{ route('gerai.checker.daily') }}"><span class="sidebar-icon">▦</span><span class="sidebar-label">Sampling Opname Harian</span></a>
-            @elseif($u->isAdminGudang())
-                <a class="sidebar-link {{ request()->routeIs('warehouse.admin.*') ? 'active' : '' }}" href="{{ route('warehouse.admin.index') }}"><span class="sidebar-icon">▦</span><span class="sidebar-label">Sampling Gudang</span></a>
-                <a class="sidebar-link {{ request()->routeIs('warehouse.history.*') ? 'active' : '' }}" href="{{ route('warehouse.history.index') }}"><span class="sidebar-icon">≡</span><span class="sidebar-label">History Sampling</span></a>
-                <a class="sidebar-link {{ request()->routeIs('label.*') ? 'active' : '' }}" href="{{ route('label.index') }}"><span class="sidebar-icon">▤</span><span class="sidebar-label">Cetak Label QR</span></a>
-            @elseif($u->isCheckerGudang())
-                <a class="sidebar-link {{ request()->routeIs('warehouse.checker.*') ? 'active' : '' }}" href="{{ route('warehouse.checker.index') }}"><span class="sidebar-icon">✓</span><span class="sidebar-label">Tugas Sampling</span></a>
-                <a class="sidebar-link {{ request()->routeIs('label.*') ? 'active' : '' }}" href="{{ route('label.index') }}"><span class="sidebar-icon">▤</span><span class="sidebar-label">Cetak Label QR</span></a>
-            @else
-                <a class="sidebar-link {{ request()->routeIs('checker.*') ? 'active' : '' }}" href="{{ route('checker.home') }}"><span class="sidebar-icon">✓</span><span class="sidebar-label">Opname Legacy</span></a>
+                <a class="sidebar-link {{ request()->routeIs('admin.menu-permissions.*') ? 'active' : '' }}" href="{{ route('admin.menu-permissions.index') }}">
+                    <span class="sidebar-icon">⚙</span><span class="sidebar-label">Hak Akses Menu</span>
+                </a>
             @endif
         </nav>
-
         <div class="sidebar-footer">
             <a class="sidebar-link {{ request()->routeIs('password.*') ? 'active' : '' }}" href="{{ route('password.edit') }}"><span class="sidebar-icon">⚿</span><span class="sidebar-label">Ganti Password</span></a>
             <form method="POST" action="{{ route('logout') }}">@csrf<button class="sidebar-link sidebar-logout" type="submit"><span class="sidebar-icon">↪</span><span class="sidebar-label">Keluar</span></button></form>
         </div>
     </aside>
     <button class="sidebar-overlay" id="sidebar-overlay" type="button" aria-label="Tutup menu"></button>
-
     <div class="app-main">
         <header class="app-topbar">
             <button class="sidebar-toggle" id="sidebar-toggle" type="button" aria-label="Buka atau tutup menu" aria-controls="app-sidebar" aria-expanded="true">☰</button>
             <div class="topbar-title"><strong>@yield('title', 'Stock Opname')</strong><small>{{ $u->name }}</small></div>
             <span class="topbar-role">{{ $u->role }}</span>
         </header>
-
         <main class="page-wrap @yield('page-class')">
             @if(session('success'))<div class="alert success">{{ session('success') }}</div>@endif
-            @if($errors->any())
-                <div class="alert danger"><strong>Ada yang perlu diperiksa.</strong><ul>@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>
-            @endif
+            @if($errors->any())<div class="alert danger"><strong>Ada yang perlu diperiksa.</strong><ul>@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
             @yield('content')
         </main>
     </div>

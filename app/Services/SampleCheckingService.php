@@ -30,10 +30,15 @@ class SampleCheckingService
             throw ValidationException::withMessages(['barcode' => 'Barcode wajib diisi.']);
         }
 
-        try {
-            $qr = ScanCode::parseQrPayload($barcode);
-        } catch (InvalidArgumentException $e) {
-            throw ValidationException::withMessages(['barcode' => $e->getMessage()]);
+        // Master barcode always takes precedence, regardless of '-' characters.
+        $mapping = ItemBarcode::query()->where('barcode', $barcode)->first();
+        $qr = null;
+        if (! $mapping) {
+            try {
+                $qr = ScanCode::parseQrPayload($barcode);
+            } catch (InvalidArgumentException $e) {
+                throw ValidationException::withMessages(['barcode' => $e->getMessage()]);
+            }
         }
 
         if ($qr !== null) {
@@ -52,8 +57,7 @@ class SampleCheckingService
                 ]);
             }
         } else {
-            // Only values without a dash are allowed to use barcode master lookup.
-            $mapping = ItemBarcode::query()->where('barcode', $barcode)->first();
+            // Uses the mapping already checked before the optional QR parser.
             if (! $mapping) {
                 throw ValidationException::withMessages(['barcode' => 'Barcode tidak ditemukan di DB_AppHub.']);
             }

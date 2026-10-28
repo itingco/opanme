@@ -1,0 +1,21 @@
+OPANME PATCH - Cetak Label QR untuk Admin Gudang & Checker Gudang
+28 Oktober 2026
+
+Perubahan:
+1. app/Http/Middleware/RoleMiddleware.php
+   Membuka akses route label.* hanya untuk ADMIN, ADMIN_GUDANG, CHECKER_GUDANG.
+   Role lain tetap tidak bisa; route ADMIN lain tetap terlindungi.
+2. resources/views/layouts/app.blade.php
+   Tambah tautan "Cetak Label QR" ke sidebar Admin Gudang dan Checker Gudang.
+
+Tidak mengubah sistem print QR, layout 4x3/10x10, database, atau route.
+
+Cara pasang:
+1. Backup file lokal yang namanya sama.
+2. Ekstrak ZIP dan copy folder app/ serta resources/ ke root project Laravel.
+3. php artisan optimize:clear
+4. Login sebagai ADMIN_GUDANG dan CHECKER_GUDANG, buka Cetak Label QR,
+   cari kode barang, preview ukuran 4x3 dan 10x10 lalu coba print.
+5. Cek role lain tetap ditolak untuk URL /label dan role gudang tidak bisa membuka /admin/barcodes.
+
+Catatan: Patch ini mengikuti struktur branch main GitHub dan patch sebelumnya.

@@ -34,21 +34,21 @@ class ScanService
 
         $this->assertActiveAssignedSession($checker, $session);
 
-        // Global scan rule: payload with "-" is KODEBARANG-QTY and must be
-        // resolved directly by ItemCode. Only values without "-" use barcode master.
-        try {
-            $qr = ScanCode::parseQrPayload($barcode);
-        } catch (InvalidArgumentException $e) {
-            throw ValidationException::withMessages(['barcode' => $e->getMessage()]);
-        }
-
-        if ($qr !== null) {
-            return $this->scanQrPayload($checker, $session, $barcode, $qr);
-        }
-
+        // Exact master barcode takes precedence, including barcodes containing '-'.
         $mapping = ItemBarcode::query()
             ->where('barcode', $barcode)
             ->first();
+
+        if (! $mapping) {
+            try {
+                $qr = ScanCode::parseQrPayload($barcode);
+            } catch (InvalidArgumentException $e) {
+                throw ValidationException::withMessages(['barcode' => $e->getMessage()]);
+            }
+            if ($qr !== null) {
+                return $this->scanQrPayload($checker, $session, $barcode, $qr);
+            }
+        }
 
         if (! $mapping) {
             $discovered = StockOpnameDiscoveredItem::query()

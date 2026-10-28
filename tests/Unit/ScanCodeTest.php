@@ -22,7 +22,7 @@ class ScanCodeTest extends TestCase
         ], ScanCode::parseQrPayload('ABC-DEF-12'));
     }
 
-    public function test_invalid_qty_after_dash_never_falls_back_to_barcode(): void
+    public function test_invalid_qty_after_dash_is_rejected_when_master_lookup_failed(): void
     {
         $this->expectException(InvalidArgumentException::class);
         ScanCode::parseQrPayload('ABC-XYZ');

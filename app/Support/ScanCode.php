@@ -9,9 +9,8 @@ final class ScanCode
     /**
      * Parse QR label payload in the form ITEM-CODE-QTY.
      *
-     * Rule requested by the application:
-     * - no "-"  => it is a normal barcode and must be looked up in barcode master;
-     * - has "-" => it is always treated as item-code + qty, never as a barcode.
+     * Call this parser ONLY after an exact lookup in the barcode master fails.
+     * A registered barcode containing "-" must always be treated as master barcode.
      *
      * The last dash is used as separator, so item codes may also contain dashes.
      * Example: ABC-DEF-12 => item_code ABC-DEF, qty 12.
@@ -37,8 +36,7 @@ final class ScanCode
         }
 
         // QR label generator only creates positive whole-number quantities.
-        // Keeping the scanner strict prevents a normal barcode containing "-"
-        // from silently falling back to barcode-master lookup.
+        // Invalid QR fallback is rejected once no barcode-master record exists.
         if (! preg_match('/^[1-9][0-9]{0,11}$/', $qtyRaw)) {
             throw new InvalidArgumentException(
                 'Format QR tidak valid. Bagian setelah tanda "-" harus QTY bilangan bulat lebih dari 0.'

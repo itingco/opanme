@@ -47,8 +47,10 @@
             @elseif($u->isAdminGudang())
                 <a class="sidebar-link {{ request()->routeIs('warehouse.admin.*') ? 'active' : '' }}" href="{{ route('warehouse.admin.index') }}"><span class="sidebar-icon">▦</span><span class="sidebar-label">Sampling Gudang</span></a>
                 <a class="sidebar-link {{ request()->routeIs('warehouse.history.*') ? 'active' : '' }}" href="{{ route('warehouse.history.index') }}"><span class="sidebar-icon">≡</span><span class="sidebar-label">History Sampling</span></a>
+                <a class="sidebar-link {{ request()->routeIs('label.*') ? 'active' : '' }}" href="{{ route('label.index') }}"><span class="sidebar-icon">▤</span><span class="sidebar-label">Cetak Label QR</span></a>
             @elseif($u->isCheckerGudang())
                 <a class="sidebar-link {{ request()->routeIs('warehouse.checker.*') ? 'active' : '' }}" href="{{ route('warehouse.checker.index') }}"><span class="sidebar-icon">✓</span><span class="sidebar-label">Tugas Sampling</span></a>
+                <a class="sidebar-link {{ request()->routeIs('label.*') ? 'active' : '' }}" href="{{ route('label.index') }}"><span class="sidebar-icon">▤</span><span class="sidebar-label">Cetak Label QR</span></a>
             @else
                 <a class="sidebar-link {{ request()->routeIs('checker.*') ? 'active' : '' }}" href="{{ route('checker.home') }}"><span class="sidebar-icon">✓</span><span class="sidebar-label">Opname Legacy</span></a>
             @endif

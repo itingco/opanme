@@ -13,29 +13,6 @@ class BarcodeService
     {
         $barcode = trim($barcode);
 
-        // QR label is intentionally resolved BEFORE barcode master lookup.
-        // If a dash is present but the payload is invalid, ScanCode throws and
-        // the scan is rejected instead of accidentally treating it as barcode.
-        try {
-            $qr = ScanCode::parseQrPayload($barcode);
-        } catch (InvalidArgumentException $e) {
-            throw new \RuntimeException($e->getMessage(), 0, $e);
-        }
-
-        if ($qr !== null) {
-            return (object) [
-                'barcode' => $barcode,
-                'item_code' => $qr['item_code'],
-                'uom_code' => null,
-                // Existing invoice / good-transfer engines use ratio_qty as the
-                // amount added to scanned base qty. For a QR, the encoded QTY is
-                // already that amount, so no barcode/UOM ratio lookup is needed.
-                'ratio_qty' => $qr['qty'],
-                'is_qr_payload' => true,
-                'qr_qty' => $qr['qty'],
-            ];
-        }
-
         $b = config('warehouse_check.barcode');
         $r = config('warehouse_check.ratio');
 
@@ -62,7 +39,33 @@ class BarcodeService
             WHERE RTRIM(B.{$bc}) = ?
         ";
 
-        return DB::connection('apphub')->selectOne($sql, [$barcode]);
+        $master = DB::connection('apphub')->selectOne($sql, [$barcode]);
+        if ($master !== null) {
+            return $master;
+        }
+
+        // Only if exact barcode is absent do we interpret the final '-' as qty.
+        try {
+            $qr = ScanCode::parseQrPayload($barcode);
+        } catch (InvalidArgumentException $e) {
+            throw new \RuntimeException($e->getMessage(), 0, $e);
+        }
+
+        if ($qr !== null) {
+            return (object) [
+                'barcode' => $barcode,
+                'item_code' => $qr['item_code'],
+                'uom_code' => null,
+                // Existing invoice / good-transfer engines use ratio_qty as the
+                // amount added to scanned base qty. For a QR, the encoded QTY is
+                // already that amount, so no barcode/UOM ratio lookup is needed.
+                'ratio_qty' => $qr['qty'],
+                'is_qr_payload' => true,
+                'qr_qty' => $qr['qty'],
+            ];
+        }
+
+        return null;
     }
 
     /**

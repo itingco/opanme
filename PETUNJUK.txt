@@ -1,0 +1,11 @@
+OPANME — PATCH LABEL SATUAN-QTY
+Dasar: opanme_patch_label_satuan_barcode_2026-10-29.zip harus sudah dipasang.
+Perubahan hanya:
+- app/Http/Controllers/Label/LabelController.php
+- public/label-assets/js/item-lookup.js
+- resources/views/label/index.blade.php
+- resources/views/label/print.blade.php
+QR: BARCODE-QTY apabila satuan/barcode master dipilih; fallback KODEBARANG-QTY.
+Server menolak QR buatan yang kebetulan sudah terdaftar utuh sebagai barcode master.
+Contoh BOX barcode 899002 qty 5 => QR 899002-5.
+Jalankan php artisan optimize:clear setelah menimpa folder.

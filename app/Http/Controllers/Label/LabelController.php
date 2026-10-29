@@ -53,8 +53,23 @@ class LabelController extends Controller
         $qty = (int) $data['qty'];
         $barcode = $selected ? trim((string) $selected->barcode) : null;
         $uom = $selected ? trim((string) $selected->uom_code) : 'PCS';
-        // Barcode master harus dicetak apa adanya: jangan diberi suffix qty.
-        $qrValue = $barcode ?: QrPayload::make($item->code, $qty);
+        // Encode quantity of the selected UOM, not base units.
+        // WarehouseCheck resolves full barcode first, then parses the final -qty.
+        $qrValue = QrPayload::make($barcode ?: $item->code, $qty);
+        // Exact barcode has priority in WarehouseCheck. Avoid printing a generated
+        // BARCODE-QTY that already belongs to a different master entry.
+        try {
+            if (ItemBarcode::query()->where('barcode', $qrValue)->exists()) {
+                throw ValidationException::withMessages([
+                    'qty' => 'QR '.$qrValue.' sudah terdaftar sebagai barcode master. Ubah qty atau barcode untuk menghindari salah scan.',
+                ]);
+            }
+        } catch (ValidationException $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            report($e);
+            throw ValidationException::withMessages(['qty' => 'Gagal memeriksa benturan nilai QR pada master barcode.']);
+        }
         $labelSize = $data['label_size'];
         $printedAt = now();
         $user = $request->user();

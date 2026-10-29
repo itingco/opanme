@@ -10,7 +10,7 @@ const close=()=>{results.hidden=true;results.replaceChildren();items=[];index=-1
 const selectedRadio=()=>options.querySelector('input[name="barcode_id"]:checked');
 const update=()=>{
  const found=selectedRadio(),isFallback=unitReady&&!barcodeRows.length;
- preview.textContent=found?found.dataset.barcode:(isFallback&&selected&&qty.value?`${selected}-${qty.value}`:'-');
+ preview.textContent=(found&&qty.value)?`${found.dataset.barcode}-${qty.value}`:(isFallback&&selected&&qty.value?`${selected}-${qty.value}`:'-');
  submit.disabled=!(selected&&unitReady&&(isFallback||found));
 };
 const resetUnits=msg=>{unitAbort?.abort();unitReady=false;barcodeRows=[];options.replaceChildren();const x=document.createElement('div');x.className='label-message';x.textContent=msg;options.append(x);update()};

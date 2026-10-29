@@ -13,13 +13,13 @@
 <div class="field field--lookup"><label for="item_code">Cari nama atau kode barang</label><div class="lookup-wrap"><input id="item_code" name="item_code" type="text" value="{{ old('item_code') }}" maxlength="100" autocomplete="off" placeholder="Ketik nama / kode barang" aria-autocomplete="list" aria-controls="item-results" required><span class="lookup-status" id="lookup-status" aria-live="polite"></span><div class="lookup-results" id="item-results" role="listbox" hidden></div></div><small>Pilih barang dari daftar pencarian.</small></div>
 <div class="field"><label for="item_name">Nama barang</label><input id="item_name" type="text" readonly tabindex="-1" placeholder="Muncul otomatis setelah barang dipilih"></div>
 <div class="field"><label>Satuan / Barcode tersedia</label><div id="barcode-options" class="label-unit-options" aria-live="polite"><div class="label-message">Pilih barang terlebih dahulu.</div></div><small id="barcode-help">Satuan dan barcode diambil dari DB_AppHub.ItemBarcode. Bila tidak ada, QR lama kode-qty akan digunakan.</small></div>
-<div class="field"><label for="qty">Qty label</label><input id="qty" name="qty" type="number" min="1" max="999999" step="1" inputmode="numeric" value="{{ old('qty', 1) }}" required><small>Qty ditampilkan pada label. Jika menggunakan barcode master, angka qty tidak ditambahkan ke nilai QR.</small></div>
+<div class="field"><label for="qty">Qty label</label><input id="qty" name="qty" type="number" min="1" max="999999" step="1" inputmode="numeric" value="{{ old('qty', 1) }}" required><small>Qty adalah jumlah satuan terpilih. Contoh: 5 BOX akan dihitung sebagai 5 × ratio BOX oleh aplikasi WarehouseCheck.</small></div>
 <fieldset class="label-size-fieldset"><legend>Ukuran label</legend><div class="label-size-options"><label class="label-size-option"><input type="radio" name="label_size" value="10x10" @checked(old('label_size','10x10') === '10x10') required>10 × 10 cm</label><label class="label-size-option"><input type="radio" name="label_size" value="4x3" @checked(old('label_size','10x10') === '4x3') required>4 × 3 cm</label></div></fieldset>
-<div class="form-summary"><div><span>Nilai QR yang dicetak</span><strong id="qr-preview">-</strong></div><p>Barcode master dicetak persis sesuai satuan yang dipilih.</p></div>
+<div class="form-summary"><div><span>Nilai QR yang dicetak</span><strong id="qr-preview">-</strong></div><p>QR master berformat BARCODE-QTY. Scanner mengalikan qty dengan ratio satuan; kode barang tanpa barcode memakai KODE-QTY.</p></div>
 <button class="button button--primary" id="submit-button" type="submit" disabled>Buat &amp; Preview Label</button><a class="button button--secondary" href="{{ url('/') }}">Kembali ke Stock Opname</a>
 </form></section></main>
 @endsection
 @push('scripts')
 <script>window.itemLookupConfig={endpoint:@json(route('label.items.index')),previousCode:@json(old('item_code')),previousBarcodeId:@json(old('barcode_id'))};</script>
-<script src="{{ asset('label-assets/js/item-lookup.js') }}?v=20261029barcode" defer></script>
+<script src="{{ asset('label-assets/js/item-lookup.js') }}?v=20261029unitqty" defer></script>
 @endpush

@@ -34,7 +34,7 @@
 <div class="compact-qr" aria-label="QR berisi {{ $qrValue }}">{!! SimpleSoftwareIO\QrCode\Facades\QrCode::format('svg')->size(520)->margin(1)->errorCorrection('H')->generate($qrValue) !!}</div>
 <div class="compact-details"><div class="compact-name" id="compact-item-name">{{ $item->name }}</div><div class="compact-fields"><div><span class="compact-field-caption">KODE BARANG</span><strong class="compact-field-value">{{ $item->code }}</strong></div><div><span class="compact-field-caption">QTY</span><strong class="compact-field-value">{{ $qty }}</strong></div></div><div class="compact-unit">SATUAN: {{ $uom }} @if($barcode) · BARCODE @else · QR KODE-QTY @endif</div></div>
 <div class="compact-audit">{{ $printedBy }}, {{ $printedAt->format('d-m-Y H:i:s') }}</div></article>
-@if($barcode)<p class="print-hint screen-only">QR memakai barcode master satuan {{ $uom }}: {{ $barcode }}. Qty hanya ditampilkan di label.</p>@else<p class="print-hint screen-only">Tidak ada master barcode. QR memakai kode barang-qty: {{ $qrValue }}.</p>@endif
+@if($barcode)<p class="print-hint screen-only">QR {{ $qrValue }} berisi barcode master satuan {{ $uom }} dengan jumlah {{ $qty }} satuan. WarehouseCheck mengalikan jumlah dengan ratio UOM.</p>@else<p class="print-hint screen-only">Tidak ada master barcode. QR memakai kode barang-qty: {{ $qrValue }}.</p>@endif
 </div>
 @endsection
 @push('scripts')

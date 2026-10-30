@@ -2,7 +2,7 @@
 @section('title', 'Label '.$item->code)
 @push('head')
 <style>
-@page{size:{{ $labelSize === '4x3' ? '50mm 30mm' : '100mm 100mm' }};margin:0}
+@page{size:{{ $labelSize === '4x3' ? '40mm 30mm' : '100mm 100mm' }};margin:0}
 .label-canvas--compact{display:grid;overflow:hidden;box-sizing:border-box;border:0;background:#fff;color:#000;font-family:Arial,Helvetica,sans-serif;box-shadow:0 15px 35px rgba(22,31,50,.15)}
 .label-canvas--4x3{width:40mm;height:30mm;min-width:40mm;min-height:30mm;grid-template-columns:18.7mm minmax(0,1fr);grid-template-rows:minmax(0,1fr) 3.6mm}
 .label-canvas--10x10{width:100mm;height:100mm;min-width:100mm;min-height:100mm;grid-template-columns:47mm minmax(0,1fr);grid-template-rows:minmax(0,1fr) 11mm}
@@ -25,9 +25,9 @@
 @media print{html,body,.print-page{margin:0!important;padding:0!important;overflow:hidden!important;background:#fff!important}.print-page{display:flex!important;justify-content:center!important;align-items:center!important}.label-canvas--compact{margin:0!important;box-shadow:none!important;break-inside:avoid;page-break-inside:avoid}
 @if($labelSize==='4x3')
 html,body,.print-page{
-    width:50mm!important;
-    min-width:50mm!important;
-    max-width:50mm!important;
+    width:40mm!important;
+    min-width:40mm!important;
+    max-width:40mm!important;
     height:30mm!important;
     min-height:30mm!important;
     max-height:30mm!important;

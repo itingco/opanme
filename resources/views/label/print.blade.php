@@ -23,7 +23,29 @@
 .compact-audit{grid-column:1/-1;grid-row:2;display:flex;justify-content:flex-end;align-items:center;min-width:0;overflow:hidden;white-space:nowrap;border-top:1px solid #999;font-weight:400}
 .label-canvas--4x3 .compact-audit{margin:0 .9mm;font-size:5.5pt}.label-canvas--10x10 .compact-audit{margin:0 5mm;font-size:11pt}
 @media print{html,body,.print-page{margin:0!important;padding:0!important;overflow:hidden!important;background:#fff!important}.print-page{display:flex!important;justify-content:center!important;align-items:center!important}.label-canvas--compact{margin:0!important;box-shadow:none!important;break-inside:avoid;page-break-inside:avoid}
-@if($labelSize==='4x3')html,body,.print-page{width:50mm!important;height:30mm!important}.label-canvas--4x3{width:40mm!important;min-width:40mm!important;max-width:40mm!important;height:30mm!important;min-height:30mm!important;max-height:30mm!important}
+@if($labelSize==='4x3')
+html,body,.print-page{
+    width:50mm!important;
+    min-width:50mm!important;
+    max-width:50mm!important;
+    height:30mm!important;
+    min-height:30mm!important;
+    max-height:30mm!important;
+}
+.print-page{
+    position:relative!important;
+    display:flex!important;
+    align-items:center!important;
+    justify-content:center!important;
+}
+.label-canvas--4x3{
+    width:40mm!important;
+    min-width:40mm!important;
+    max-width:40mm!important;
+    height:30mm!important;
+    min-height:30mm!important;
+    max-height:30mm!important;
+}
 @else html,body,.print-page,.label-canvas--10x10{width:100mm!important;min-width:100mm!important;max-width:100mm!important;height:100mm!important;min-height:100mm!important;max-height:100mm!important}
 @endif }
 </style>

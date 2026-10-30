@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Database\AppHubEloquentBuilder;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 
 class ItemBarcode extends Model
@@ -32,6 +33,41 @@ class ItemBarcode extends Model
     public function appHubColumn(string $column): string
     {
         return self::COLUMN_MAP[$column] ?? $column;
+    }
+
+    /**
+     * Find master barcodes for an ERP item code.
+     *
+     * Exact ItemCode is always preferred. If no exact row exists and the code
+     * is numeric, retry with numeric equivalence so ERP `03176` can match a
+     * legacy/Excel master stored as `3176`. Alphanumeric codes remain exact.
+     */
+    public static function forItemCode(string $itemCode): Collection
+    {
+        $itemCode = trim($itemCode);
+
+        if ($itemCode === '') {
+            return new Collection();
+        }
+
+        $exact = static::query()
+            ->where('item_code', $itemCode)
+            ->orderBy('uom_code')
+            ->orderBy('barcode')
+            ->get();
+
+        if ($exact->isNotEmpty() || preg_match('/^\d+$/D', $itemCode) !== 1) {
+            return $exact;
+        }
+
+        return static::query()
+            ->whereRaw(
+                'TRY_CONVERT(decimal(38,0), LTRIM(RTRIM([ItemCode]))) = TRY_CONVERT(decimal(38,0), ?)',
+                [$itemCode]
+            )
+            ->orderBy('uom_code')
+            ->orderBy('barcode')
+            ->get();
     }
 
     public function appHubWritePayload(array $payload): array

@@ -31,7 +31,8 @@ class LabelController extends Controller
         }
 
         try {
-            $available = ItemBarcode::query()->where('item_code', $item->code)->get();
+            // Exact match first, then numeric-equivalent fallback (03176 <-> 3176).
+            $available = ItemBarcode::forItemCode($item->code);
         } catch (Throwable $e) {
             report($e);
             throw ValidationException::withMessages(['barcode_id' => 'Gagal membaca master barcode DB_AppHub.']);

@@ -24,11 +24,7 @@ class ItemLookupController extends Controller
         if (filled($data['item_code'] ?? null)) {
             $code = trim($data['item_code']);
             try {
-                $rows = ItemBarcode::query()
-                    ->where('item_code', $code)
-                    ->orderBy('uom_code')
-                    ->orderBy('barcode')
-                    ->get();
+                $rows = ItemBarcode::forItemCode($code);
 
                 return response()->json(['barcodes' => $rows->map(static fn ($row): array => [
                     'id' => (int) $row->id,

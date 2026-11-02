@@ -18,7 +18,7 @@
     const list = document.getElementById('warehouse-list');
     const submit = document.getElementById('cycle-submit');
     const form = document.getElementById('cycle-form');
-    const endpoint = @json(route('admin.erp.warehouses'));
+    const endpoint = @json(auth()->user()->isAdminGerai() ? route('gerai.admin.warehouses') : route('admin.erp.warehouses'));
     const previousIds = @json(array_map('strval', old('warehouse_ids', [])));
     let controller;
 

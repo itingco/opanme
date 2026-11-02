@@ -32,6 +32,33 @@ class CycleSummaryService
         ];
     }
 
+    /**
+     * Ringkasan yang dipakai pada halaman Close/Review/Override.
+     * Total SKU mengikuti baris summary final; "cocok" berarti variance = 0
+     * setelah memperhitungkan override admin bila ada.
+     *
+     * @return array{total_sku:int,matched_sku:int,variance_sku:int}
+     */
+    public function stats(StockOpnameCycle $cycle, ?int $warehouseId = null): array
+    {
+        $base = $this->query($cycle, $warehouseId, false)->reorder();
+
+        $row = DB::query()
+            ->fromSub($base, 'cycle_progress')
+            ->selectRaw(<<<'SQL'
+                COUNT(*) AS total_sku,
+                SUM(CASE WHEN ABS(variance) <= 0.00005 THEN 1 ELSE 0 END) AS matched_sku,
+                SUM(CASE WHEN ABS(variance) > 0.00005 THEN 1 ELSE 0 END) AS variance_sku
+            SQL)
+            ->first();
+
+        return [
+            'total_sku' => (int) ($row->total_sku ?? 0),
+            'matched_sku' => (int) ($row->matched_sku ?? 0),
+            'variance_sku' => (int) ($row->variance_sku ?? 0),
+        ];
+    }
+
     public function query(StockOpnameCycle $cycle, ?int $warehouseId = null, bool $varianceOnly = false): Builder
     {
         $normal = $this->normalQuery($cycle);

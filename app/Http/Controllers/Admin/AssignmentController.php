@@ -13,12 +13,24 @@ use Illuminate\View\View;
 
 class AssignmentController extends Controller
 {
+    /**
+     * Checker Gerai sekarang juga menjadi checker untuk cycle legacy.
+     * CHECKER lama tetap diterima agar assignment yang sudah berjalan tidak putus.
+     * CHECKER_GUDANG tetap diterima karena alur opname gudang lama tidak diubah.
+     */
     private function eligibleCheckerIds(): array
     {
         return User::query()
-            ->whereIn('role', [User::ROLE_CHECKER, User::ROLE_CHECKER_GUDANG])
+            ->whereIn('role', [
+                User::ROLE_CHECKER_GERAI,
+                User::ROLE_GERAI,
+                User::ROLE_CHECKER,
+                User::ROLE_CHECKER_GUDANG,
+            ])
             ->where('is_active', true)
-            ->pluck('id')->map(fn ($id) => (int) $id)->all();
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
     }
 
     public function edit(StockOpnameCycle $cycle): View
@@ -26,10 +38,19 @@ class AssignmentController extends Controller
         abort_unless($cycle->status === StockOpnameCycle::STATUS_DRAFT, 422);
         $cycle->load(['warehouses', 'assignments']);
         $checkers = User::query()
-            ->whereIn('role', [User::ROLE_CHECKER, User::ROLE_CHECKER_GUDANG])
+            ->whereIn('role', [
+                User::ROLE_CHECKER_GERAI,
+                User::ROLE_GERAI,
+                User::ROLE_CHECKER,
+                User::ROLE_CHECKER_GUDANG,
+            ])
             ->where('is_active', true)
-            ->orderBy('name')->get();
-        $selected = $cycle->assignments->groupBy('warehouse_id')->map(fn ($rows) => $rows->pluck('checker_id')->all());
+            ->orderBy('name')
+            ->get();
+        $selected = $cycle->assignments
+            ->groupBy('warehouse_id')
+            ->map(fn ($rows) => $rows->pluck('checker_id')->all());
+
         return view('admin.cycles.assignments', compact('cycle', 'checkers', 'selected'));
     }
 
@@ -43,6 +64,7 @@ class AssignmentController extends Controller
         ]);
         $validWarehouses = array_map('intval', $cycle->warehouses()->pluck('id')->all());
         $validCheckers = $this->eligibleCheckerIds();
+
         DB::transaction(function () use ($cycle, $data, $validWarehouses, $validCheckers, $request): void {
             CheckerAssignment::where('cycle_id', $cycle->id)->delete();
             foreach (($data['assignments'] ?? []) as $warehouseId => $checkerIds) {
@@ -59,6 +81,7 @@ class AssignmentController extends Controller
                 }
             }
         });
+
         return redirect()->route('admin.cycles.show', $cycle)->with('success', 'Assignment checker tersimpan.');
     }
 }

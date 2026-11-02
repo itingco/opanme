@@ -10,20 +10,29 @@
     @stack('styles')
 </head>
 <body>
-@auth
+@if(auth()->check())
 @php
     $u = auth()->user();
     $menuPermission = app(\App\Services\MenuPermissionService::class);
     $menuDefinitions = config('menu_permissions.menus', []);
     $homeName = $menuPermission->firstAllowedRoute((string)$u->role);
     $homeRoute = $homeName ? route($homeName) : route('password.edit');
+    $canonicalRole = $menuPermission->canonicalRole((string) $u->role);
+    $roleLabel = match ($canonicalRole) {
+        'ADMIN' => 'SUPERADMIN',
+        'ADMIN_GERAI' => 'ADMIN GERAI',
+        'ADMIN_GUDANG' => 'ADMIN GUDANG',
+        'CHECKER_GERAI' => 'CHECKER GERAI',
+        'CHECKER_GUDANG' => 'CHECKER GUDANG',
+        default => $canonicalRole,
+    };
     $icons = ['dashboard'=>'⌂','gerai_admin'=>'◎','gerai_reports'=>'≡','gerai_checker'=>'▦','warehouse_admin'=>'▦','warehouse_history'=>'≡','warehouse_checker'=>'✓','warehouse_legacy'=>'◫','cycles'=>'◫','legacy_checker'=>'✓','barcodes'=>'▥','label'=>'▤','ratios'=>'⇄','users'=>'♙'];
 @endphp
 <div class="app-shell app-shell-sidebar" id="app-shell">
     <aside class="app-sidebar" id="app-sidebar" aria-label="Menu utama">
         <a href="{{ $homeRoute }}" class="sidebar-brand">
             <span class="brand-mark">SO</span>
-            <span class="sidebar-brand-copy"><strong>Stock Opname</strong><small>{{ $u->role }}</small></span>
+            <span class="sidebar-brand-copy"><strong>Stock Opname</strong><small>{{ $roleLabel }}</small></span>
         </a>
         <nav class="sidebar-nav">
             @foreach($menuDefinitions as $key => $menu)
@@ -34,9 +43,9 @@
                     </a>
                 @endif
             @endforeach
-            @if($u->isAdmin())
+            @if($u->isAdmin() && \Illuminate\Support\Facades\Route::has('admin.menu-permissions.index'))
                 <a class="sidebar-link {{ request()->routeIs('admin.menu-permissions.*') ? 'active' : '' }}" href="{{ route('admin.menu-permissions.index') }}">
-                    <span class="sidebar-icon">⚙</span><span class="sidebar-label">Hak Akses Menu</span>
+                    <span class="sidebar-icon">⚙</span><span class="sidebar-label">Setup Role &amp; Hak Akses</span>
                 </a>
             @endif
         </nav>
@@ -50,11 +59,26 @@
         <header class="app-topbar">
             <button class="sidebar-toggle" id="sidebar-toggle" type="button" aria-label="Buka atau tutup menu" aria-controls="app-sidebar" aria-expanded="true">☰</button>
             <div class="topbar-title"><strong>@yield('title', 'Stock Opname')</strong><small>{{ $u->name }}</small></div>
-            <span class="topbar-role">{{ $u->role }}</span>
+            <span class="topbar-role">{{ $roleLabel }}</span>
         </header>
         <main class="page-wrap @yield('page-class')">
             @if(session('success'))<div class="alert success">{{ session('success') }}</div>@endif
             @if($errors->any())<div class="alert danger"><strong>Ada yang perlu diperiksa.</strong><ul>@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
+
+            @php
+                $routeCycle = request()->route('cycle');
+                $showCycleProgress = $routeCycle instanceof \App\Models\StockOpnameCycle
+                    && in_array($routeCycle->status, [\App\Models\StockOpnameCycle::STATUS_OPEN, \App\Models\StockOpnameCycle::STATUS_CLOSED, \App\Models\StockOpnameCycle::STATUS_FINALIZED], true)
+                    && request()->routeIs('admin.cycles.show', 'admin.cycles.summary');
+                if ($showCycleProgress) {
+                    $progressWarehouseId = request()->routeIs('admin.cycles.summary') ? (request()->integer('warehouse_id') ?: null) : null;
+                    $cycleProgress = app(\App\Services\CycleSummaryService::class)->stats($routeCycle, $progressWarehouseId);
+                }
+            @endphp
+            @if($showCycleProgress)
+                @include('admin.cycles.partials.progress-summary', ['cycleProgress' => $cycleProgress])
+            @endif
+
             @yield('content')
         </main>
     </div>
@@ -83,7 +107,7 @@
 </script>
 @else
 <div class="app-shell"><main class="page-wrap @yield('page-class')">@yield('content')</main></div>
-@endauth
+@endif
 <script src="{{ asset('assets/vendor/zxing-browser.min.js') }}?v=20260923"></script>
 <script src="{{ asset('assets/js/app.js') }}?v=20260923"></script>
 @stack('scripts')

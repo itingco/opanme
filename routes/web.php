@@ -132,6 +132,11 @@ Route::middleware(['auth', 'role:ADMIN'])
         |--------------------------------------------------------------------------
         */
 
+        // Setup Role & Hak Akses: Superadmin saja.
+        Route::get('/menu-permissions', [\App\Http\Controllers\Admin\MenuPermissionController::class, 'index'])
+            ->name('menu-permissions.index');
+        Route::put('/menu-permissions', [\App\Http\Controllers\Admin\MenuPermissionController::class, 'update'])
+            ->name('menu-permissions.update');
         Route::get('/users', [UserController::class, 'index'])
             ->name('users.index');
 
@@ -224,7 +229,7 @@ Route::middleware(['auth', 'role:ADMIN'])
         |--------------------------------------------------------------------------
         */
 
-        Route::get('/cycles', [CycleController::class, 'index'])
+        Route::get('/cycles', [\App\Http\Controllers\Admin\CycleListController::class, 'index'])
             ->name('cycles.index');
 
         Route::get('/cycles/create', [CycleController::class, 'create'])

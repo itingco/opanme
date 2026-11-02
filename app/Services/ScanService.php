@@ -34,7 +34,8 @@ class ScanService
 
         $this->assertActiveAssignedSession($checker, $session);
 
-        // Exact master barcode takes precedence, including barcodes containing '-'.
+        // Exact master barcode selalu diprioritaskan. Jika tidak ada, format
+        // KODEBARANG~QTY diproses sebagai label qty sederhana.
         $mapping = ItemBarcode::query()
             ->where('barcode', $barcode)
             ->first();
@@ -147,7 +148,7 @@ class ScanService
 
         if ($qr !== null) {
             throw ValidationException::withMessages([
-                'barcode' => 'Nilai dengan tanda "-" adalah QR KODEBARANG-QTY dan harus diproses melalui scan normal, bukan Non-System.',
+                'barcode' => 'Nilai dengan tanda "~" adalah label KODEBARANG~QTY dan harus diproses melalui scan normal, bukan Non-System.',
             ]);
         }
 
@@ -260,7 +261,7 @@ class ScanService
 
         if (! $item) {
             throw ValidationException::withMessages([
-                'barcode' => "Kode barang {$qr['item_code']} dari QR tidak ditemukan di ERP {$session->cycle->source_database}.",
+                'barcode' => "Kode barang {$qr['item_code']} dari label tidak ditemukan di ERP {$session->cycle->source_database}.",
             ]);
         }
 

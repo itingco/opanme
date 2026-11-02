@@ -4,21 +4,24 @@
 @php
     $q = $search ?? '';
     $roleOptions = [
-        'ADMIN' => 'ADMIN (Super Admin)',
+        'ADMIN' => 'SUPERADMIN',
         'ADMIN_GERAI' => 'ADMIN GERAI',
-        'CHECKER_GERAI' => 'CHECKER GERAI',
         'ADMIN_GUDANG' => 'ADMIN GUDANG',
+        'CHECKER_GERAI' => 'CHECKER GERAI',
         'CHECKER_GUDANG' => 'CHECKER GUDANG',
-        'CHECKER' => 'CHECKER (Legacy Stock Opname)',
-        'GERAI' => 'GERAI (Legacy → Checker Gerai)',
     ];
+    $canonicalRole = static fn(string $role): string => match ($role) {
+        'GERAI' => 'CHECKER_GERAI',
+        'CHECKER' => 'CHECKER_GERAI',
+        default => $role,
+    };
     $databases = [\App\Models\StockOpnameCycle::DB_INGCO, \App\Models\StockOpnameCycle::DB_SMI];
 @endphp
 
 <div class="page-heading master-page-heading">
     <div>
         <h1>User Management</h1>
-        <p>Atur akses Admin Gerai, Checker Gerai, Admin Gudang, Checker Gudang, dan assignment gudang lintas database.</p>
+        <p>Role disederhanakan menjadi Superadmin, Admin Gerai, Admin Gudang, Checker Gerai, dan Checker Gudang. Setiap role checker boleh memiliki lebih dari satu user.</p>
     </div>
     <button class="btn primary" type="button" id="user-create-open">+ Tambah User</button>
 </div>
@@ -39,11 +42,15 @@
     @forelse($users as $user)
         @php
             $assignmentKeys = $user->warehouseAssignments->map(fn($a) => $a->source_database.'|'.$a->erp_warehouse_id)->values();
+            $displayRole = $canonicalRole((string) $user->role);
         @endphp
         <tr>
             <td><strong>{{ $user->name }}</strong></td>
             <td>{{ $user->username }}</td>
-            <td><span class="role-badge {{ strtolower($user->role) }}">{{ $roleOptions[$user->role] ?? $user->role }}</span></td>
+            <td>
+                <span class="role-badge {{ strtolower($displayRole) }}">{{ $roleOptions[$displayRole] ?? $displayRole }}</span>
+                @if($displayRole !== $user->role)<small class="muted">legacy: {{ $user->role }}</small>@endif
+            </td>
             <td>
                 @if($user->warehouseAssignments->isNotEmpty())
                     <div class="user-assignment-summary">
@@ -63,7 +70,7 @@
                     data-action="{{ route('admin.users.update',$user) }}"
                     data-name="{{ $user->name }}"
                     data-username="{{ $user->username }}"
-                    data-role="{{ $user->role }}"
+                    data-role="{{ $displayRole }}"
                     data-active="{{ $user->is_active ? '1':'0' }}"
                     data-assignments="{{ $assignmentKeys->toJson() }}">Edit</button>
             </td>
@@ -75,16 +82,10 @@
     @include('admin.partials.table-pagination',['paginator'=>$users])
 </section>
 
-@php
-    $assignmentPanels = function() use ($databases) {
-        return $databases;
-    };
-@endphp
-
 <div class="user-modal" id="user-create-modal" hidden>
     <div class="user-modal-backdrop" data-create-close></div>
     <div class="user-modal-dialog user-modal-dialog-wide">
-        <div class="user-modal-head"><div><h2>Tambah User</h2><p>User Gerai dapat di-assign ke beberapa gudang, termasuk lintas AS_INGCO dan AS_SMI.</p></div><button type="button" class="user-modal-close" data-create-close>×</button></div>
+        <div class="user-modal-head"><div><h2>Tambah User</h2><p>Boleh membuat lebih dari satu Checker Gerai maupun Checker Gudang. User Gerai dapat di-assign ke beberapa gudang.</p></div><button type="button" class="user-modal-close" data-create-close>×</button></div>
         <form method="POST" action="{{ route('admin.users.store') }}" class="stack-form gerai-user-form">@csrf
             <div class="grid-2"><label>Nama<input name="name" required></label><label>Username<input name="username" required></label></div>
             <div class="grid-2"><label>Password<input type="password" name="password" minlength="6" required></label><label>Role<select name="role" data-role-select>@foreach($roleOptions as $value => $label)<option value="{{ $value }}">{{ $label }}</option>@endforeach</select></label></div>
@@ -108,7 +109,7 @@
 <div class="user-modal" id="user-edit-modal" hidden>
     <div class="user-modal-backdrop" data-edit-close></div>
     <div class="user-modal-dialog user-modal-dialog-wide">
-        <div class="user-modal-head"><div><h2>Edit User</h2><p>Perubahan assignment berlaku untuk pemilihan periode Gerai berikutnya.</p></div><button type="button" class="user-modal-close" data-edit-close>×</button></div>
+        <div class="user-modal-head"><div><h2>Edit User</h2><p>Akun legacy akan tersimpan memakai role baru saat disimpan ulang.</p></div><button type="button" class="user-modal-close" data-edit-close>×</button></div>
         <form method="POST" id="user-edit-form" class="stack-form gerai-user-form">@csrf @method('PUT')
             <div class="grid-2"><label>Nama<input id="edit-name" name="name" required></label><label>Username<input id="edit-username" name="username" required></label></div>
             <div class="grid-2"><label>Role<select id="edit-role" name="role" data-role-select>@foreach($roleOptions as $value => $label)<option value="{{ $value }}">{{ $label }}</option>@endforeach</select></label><label>Password Baru<input type="password" name="password" minlength="6" placeholder="Kosong = tidak berubah"></label></div>
@@ -135,7 +136,7 @@
 <script>
 document.addEventListener('DOMContentLoaded', () => {
     const warehouseUrl = @json(route('admin.erp.warehouses'));
-    const geraiRoles = new Set(['ADMIN_GERAI','CHECKER_GERAI','GERAI']);
+    const geraiRoles = new Set(['ADMIN_GERAI','CHECKER_GERAI']);
     const cache = new Map();
 
     async function loadDatabase(db) {

@@ -1,20 +1,32 @@
-OPANME - Modul Hak Akses Menu per Role
-======================================
-Patch ini dibuat berdasarkan itingco/opanme (Laravel 10) dan patch sebelumnya.
+PATCH CYCLE V3 - 02 NOVEMBER 2026
+=================================
+ISINYA:
+- app/Http/Controllers/Admin/CycleListController.php (baru)
+- resources/views/admin/cycles/index.blade.php (replace)
+- resources/views/layouts/app.blade.php (replace; berbasis FIX LOGIN V2)
+- INSTALL_PATCH.php (pendaftaran route tanpa mengganti route lain)
 
-1. Backup file dan database terlebih dahulu.
-2. Copy folder app/, config/, routes/, resources/, database/ ke root Laravel (overwrite).
-3. Jalankan: php artisan migrate
-4. Jalankan: php artisan optimize:clear
-5. Login sebagai ADMIN -> menu "Hak Akses Menu".
-6. Centang hak akses setiap role, kemudian klik Simpan Hak Akses.
+PENTING:
+Patch ini melanjutkan patch 02 Nov dan Fix Login V2 yang sudah dipasang.
+File asli app/Http/Controllers/Admin/MenuPermissionController.php,
+resources/views/admin/menu-permissions.blade.php, dan
+resources/views/admin/partials/table-pagination.blade.php harus tetap ada (sudah ada dalam repo).
 
-Catatan:
-- Semua endpoint dengan route name dalam satu modul mengikuti hak akses modul tersebut.
-- ADMIN selalu bisa mengakses halaman Hak Akses Menu (tidak bisa dimatikan via matriks).
-- Izin awal mengikuti role lama, setelah disimpan bisa berubah.
-- Ganti Password, login/logout dan route yang bukan modul daftar ini tetap diatur oleh middleware lama.
-- Jika memberi role lintas departemen, pastikan data/scope gudang tetap dilindungi oleh controller masing-masing. Role permission tidak mematikan pemeriksaan ownership atau assignment.
-- Tanpa migration, default role lama dipakai. Setelah migration, pengaturan tersimpan dalam role_menu_permissions.
-- Perubahan ini untuk per-menu, bukan CRUD granular.
-- routes/warehouse_sampling.php harus memang sudah diload oleh project (seperti versi repository ini).
+INSTALASI WINDOWS / XAMPP:
+1. BACKUP project dahulu.
+2. Extract seluruh isi ZIP ke C:\xampp82\htdocs\opname dan pilih overwrite.
+3. Buka CMD/PowerShell:
+   cd C:\xampp82\htdocs\opname
+   php INSTALL_PATCH.php
+   php artisan optimize:clear
+   php artisan view:cache
+   php artisan route:list
+4. Akses /admin/cycles dan menu "Setup Role & Hak Akses" di sidebar Superadmin.
+
+PERHATIAN:
+- INSTALL_PATCH.php perlu dijalankan sekali; hanya menambal route /admin/cycles dan
+  menambah route /admin/menu-permissions di routes/web.php. Script membuat backup routes/web.php.
+- Tidak perlu migration baru bila tabel role_menu_permissions dari migration sebelumnya telah tersedia.
+- Jika form simpan hak akses mengembalikan 503, jalankan php artisan migrate setelah backup DB.
+- Pagination tampil ketika data melebihi jumlah per halaman; untuk dua data, hanya tampil ringkasan jumlah.
+- Jangan menghapus vendor / .env / database.

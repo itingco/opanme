@@ -20,7 +20,6 @@ class GenerateLabelRequest extends FormRequest
     {
         return [
             'item_code' => ['required', 'string', 'max:100'],
-            'barcode_id' => ['nullable', 'integer', 'min:1'],
             'qty' => ['required', 'integer', 'min:1', 'max:999999'],
             'label_size' => ['required', 'in:10x10,4x3'],
         ];
@@ -30,7 +29,6 @@ class GenerateLabelRequest extends FormRequest
     {
         return [
             'item_code.required' => 'Pilih kode barang terlebih dahulu.',
-            'barcode_id.integer' => 'Pilihan satuan/barcode tidak valid.',
             'qty.required' => 'Qty wajib diisi.',
             'qty.integer' => 'Qty harus angka bulat.',
             'qty.min' => 'Qty minimal 1.',

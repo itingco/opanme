@@ -64,6 +64,7 @@ class RatioController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $data = $request->validate([
+            'ratio_id' => ['nullable', 'integer'],
             'item_code' => ['required', 'string', 'max:100'],
             'uom_code' => ['required', 'string', 'max:50'],
             'ratio' => ['required', 'numeric', 'gt:0'],
@@ -71,6 +72,34 @@ class RatioController extends Controller
 
         $itemCode = strtoupper(trim($data['item_code']));
         $uomCode = strtoupper(trim($data['uom_code']));
+        $ratioId = isset($data['ratio_id']) && $data['ratio_id'] !== ''
+            ? (int) $data['ratio_id']
+            : null;
+
+        if ($ratioId !== null) {
+            $ratio = UomRatio::query()->findOrFail($ratioId);
+
+            $duplicateExists = UomRatio::query()
+                ->where('item_code', $itemCode)
+                ->where('uom_code', $uomCode)
+                ->where('id', '<>', $ratio->getKey())
+                ->exists();
+
+            if ($duplicateExists) {
+                return back()
+                    ->withErrors([
+                        'item_code' => 'Kombinasi ItemCode + UOM tersebut sudah ada di Master Ratio.',
+                    ])
+                    ->withInput();
+            }
+
+            $ratio->item_code = $itemCode;
+            $ratio->uom_code = $uomCode;
+            $ratio->ratio = $data['ratio'];
+            $ratio->save();
+
+            return back()->with('success', 'Master ratio berhasil diperbarui.');
+        }
 
         UomRatio::updateOrCreate(
             [

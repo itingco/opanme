@@ -23,7 +23,7 @@ class CycleListController extends Controller
         if (! in_array($perPage, [10, 20, 50, 100], true)) $perPage = 20;
 
         $cycles = StockOpnameCycle::query()
-            ->with(['warehouses', 'assignments.checker'])
+            ->with(['warehouses', 'assignments.checker', 'creator:id,name,username'])
             ->withCount(['warehouses', 'assignments'])
             ->when($q !== '', function ($query) use ($q) {
                 $query->where(function ($inner) use ($q) {

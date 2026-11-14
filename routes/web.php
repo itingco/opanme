@@ -261,6 +261,9 @@ Route::middleware(['auth', 'role:ADMIN'])
         |--------------------------------------------------------------------------
         */
 
+        Route::delete('/cycles/{cycle}', \App\Http\Controllers\Admin\CycleDeleteController::class)
+            ->name('cycles.destroy');
+
         Route::post('/cycles/{cycle}/start', [CycleController::class, 'start'])
             ->name('cycles.start');
 

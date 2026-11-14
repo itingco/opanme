@@ -21,12 +21,46 @@ class RoleMiddleware
             $roles
         );
 
-        if (in_array($userRole, $allowedRoles, true)) return $next($request);
+        if (in_array($userRole, $allowedRoles, true)) {
+            return $next($request);
+        }
 
         $route = $request->route()?->getName();
+
+        /*
+         * Endpoint /admin/erp/warehouses dipakai oleh halaman Buat Cycle dan
+         * halaman User & Akses. Route ini masih berada di group role:ADMIN,
+         * sehingga role seperti ADMIN_GUDANG akan mendapat 403 walaupun
+         * permission menu Cycle Opname sudah diberikan.
+         *
+         * Izinkan endpoint warehouse hanya bila user memang mempunyai hak
+         * Cycle Opname atau User & Akses. Ini sengaja dicek langsung di sini
+         * agar tidak tergantung config cache/support-route mapping.
+         */
+        if ($route === 'admin.erp.warehouses') {
+            if (
+                $this->permissions->allowed($userRole, 'cycles')
+                || $this->permissions->allowed($userRole, 'users')
+            ) {
+                return $next($request);
+            }
+        }
+
+        // Endpoint pendukung lain yang didefinisikan dari config.
+        if ($route) {
+            $supportMenus = config('menu_permissions.support_routes.'.$route, []);
+            foreach ($supportMenus as $supportMenu) {
+                if ($this->permissions->allowed($userRole, (string) $supportMenu)) {
+                    return $next($request);
+                }
+            }
+        }
+
         // Menu yang dikonfigurasi dapat meng-override pembatasan role lama.
         $menu = $this->permissions->menuForRoute($route);
-        if ($menu !== null && $this->permissions->allowed($userRole, $menu)) return $next($request);
+        if ($menu !== null && $this->permissions->allowed($userRole, $menu)) {
+            return $next($request);
+        }
 
         abort(403);
     }

@@ -22,6 +22,13 @@ return [
         'users' => ['label' => 'User & Akses', 'route' => 'admin.users.index', 'match' => ['admin.users.*']],
     ],
 
+    // Endpoint pendukung yang dipakai oleh lebih dari satu menu dan tidak punya
+    // menu sendiri. Role non-ADMIN boleh mengakses endpoint ini hanya jika
+    // memiliki salah satu permission menu yang tercantum.
+    'support_routes' => [
+        'admin.erp.warehouses' => ['cycles', 'users'],
+    ],
+
     // Hanya 5 role yang aktif di pengaturan hak akses.
     'roles' => [
         'ADMIN',

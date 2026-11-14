@@ -145,6 +145,7 @@
                                 type="button"
                                 class="btn small"
                                 data-ratio-edit
+                                data-ratio-id="{{ $ratio->getKey() }}"
                                 data-item-code="{{ $ratio->item_code }}"
                                 data-uom-code="{{ $ratio->uom_code }}"
                                 data-ratio="{{ $ratio->ratio }}"
@@ -178,13 +179,14 @@
             <div>
                 <span class="modal-eyebrow">Master Ratio</span>
                 <h2 id="ratio-modal-title">Tambah Ratio</h2>
-                <p>Ratio selalu dihitung ke smallest UOM item tersebut.</p>
+                <p>ItemCode, UOM, dan Ratio dapat diubah. Ratio selalu dihitung ke smallest UOM item tersebut.</p>
             </div>
             <button type="button" class="user-modal-close" data-ratio-close aria-label="Tutup modal">×</button>
         </div>
 
         <form method="POST" action="{{ route('admin.ratios.store') }}" class="stack-form" id="ratio-form">
             @csrf
+            <input type="hidden" name="ratio_id" id="ratio-id" value="">
             <label>ItemCode
                 <input type="text" name="item_code" id="ratio-item-code" required maxlength="100" placeholder="Contoh: CHPTB8703">
             </label>
@@ -208,6 +210,7 @@
 document.addEventListener('DOMContentLoaded', function () {
     const modal = document.getElementById('ratio-modal');
     const title = document.getElementById('ratio-modal-title');
+    const ratioId = document.getElementById('ratio-id');
     const itemCode = document.getElementById('ratio-item-code');
     const uomCode = document.getElementById('ratio-uom-code');
     const ratioValue = document.getElementById('ratio-value');
@@ -215,14 +218,15 @@ document.addEventListener('DOMContentLoaded', function () {
     function openModal(editButton) {
         const isEdit = !!editButton;
         title.textContent = isEdit ? 'Edit Ratio' : 'Tambah Ratio';
+        ratioId.value = isEdit ? editButton.dataset.ratioId : '';
         itemCode.value = isEdit ? editButton.dataset.itemCode : '';
         uomCode.value = isEdit ? editButton.dataset.uomCode : '';
         ratioValue.value = isEdit ? editButton.dataset.ratio : '';
-        itemCode.readOnly = isEdit;
-        uomCode.readOnly = isEdit;
+        itemCode.readOnly = false;
+        uomCode.readOnly = false;
         modal.hidden = false;
         modal.setAttribute('aria-hidden', 'false');
-        setTimeout(() => (isEdit ? ratioValue : itemCode).focus(), 0);
+        setTimeout(() => itemCode.focus(), 0);
     }
 
     function closeModal() {

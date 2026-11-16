@@ -84,6 +84,7 @@
                 <option value="{{ $wh->id }}" @selected($warehouseId === $wh->id)>{{ $wh->warehouse_code }} - {{ $wh->warehouse_name }}</option>
             @endforeach
         </select>
+        <label class="summary-search"><input type="search" name="search" value="{{ request('search') }}" placeholder="Cari item code / nama barang" aria-label="Cari item"></label>
         <label class="check"><input type="checkbox" name="variance_only" value="1" @checked($varianceOnly)> Hanya selisih</label>
         <button class="btn" type="submit">Terapkan</button>
     </form>
@@ -122,6 +123,7 @@
                 </div>
             </details>
         @endif
+        @include('admin.cycles.partials.summary-bulk-tools')
         <a class="btn excel-btn" href="{{ route('admin.cycles.summary.export', $cycle).(request()->getQueryString() ? '?'.request()->getQueryString() : '') }}">Export Excel</a>
         @if($cycle->status === \App\Models\StockOpnameCycle::STATUS_FINALIZED)
             <a class="btn primary" href="{{ route('admin.cycles.final-report', $cycle) }}">Laporan Final PDF</a>

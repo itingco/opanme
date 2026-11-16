@@ -266,7 +266,15 @@ class CycleController extends Controller
     {
         $warehouseId = $request->integer('warehouse_id') ?: null;
         $varianceOnly = $request->boolean('variance_only');
-        $rows = $summary->query($cycle, $warehouseId, $varianceOnly)
+        $search = trim((string) $request->query('search', ''));
+        $query = $summary->query($cycle, $warehouseId, $varianceOnly);
+        if ($search !== '') {
+            $query->where(function ($q) use ($search) {
+                $q->where('summary_rows.item_code', 'like', '%'.$search.'%')
+                  ->orWhere('summary_rows.item_name', 'like', '%'.$search.'%');
+            });
+        }
+        $rows = $query
             ->paginate(60)
             ->withQueryString();
 

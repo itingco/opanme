@@ -292,6 +292,9 @@ Route::middleware(['auth', 'role:ADMIN'])
         Route::get('/cycles/{cycle}/summary-export', [CycleController::class, 'exportSummary'])
             ->name('cycles.summary.export');
 
+        Route::post('/cycles/{cycle}/summary/bulk-override', [\App\Http\Controllers\Admin\BulkCycleOverrideController::class, 'store'])
+            ->name('cycles.summary.bulk-override');
+
 
         /*
         |--------------------------------------------------------------------------

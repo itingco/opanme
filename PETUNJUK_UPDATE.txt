@@ -1,0 +1,36 @@
+UPDATE V2 - OPNAME: UPLOAD XLSX + OVERRIDE ADMIN SAAT OPEN
+
+PRASYARAT:
+- Patch versi pertama (Search + Override Massal) SUDAH terpasang dan berfungsi.
+- PHP 8.1+, Laravel 10, extension PHP zip dan SimpleXML aktif.
+- Backup database dan folder project sebelum mengganti file.
+
+CARA PASANG:
+1) Extract isi ZIP ini ke ROOT project Laravel (sejajar dengan artisan), pilih overwrite untuk dua file yang sudah ada.
+2) Pastikan file baru app/Services/BulkOverrideExcelReader.php ikut tercopy.
+3) Jalankan: php APPLY_UPDATE.php
+4) Jalankan: php artisan optimize:clear
+5) Refresh browser (Ctrl+F5).
+
+BERUBAH:
+- Form Override Massal: bisa upload .xlsx atau paste tab/titik koma.
+- File .xlsx: worksheet pertama (sheet1), kolom A=Item Code, B=Qty Override, C=Remarks. Header opsional.
+- Bila memilih file, data file diprioritaskan dibanding paste.
+- Qty >= 0, hingga 4 angka desimal, remarks wajib, maksimal 500 item/2MB.
+- Qty memakai smallest UOM; tetap pilih gudang tujuan.
+- Admin dapat override ERP & Non-System ketika OPEN atau CLOSED; FINALIZED tetap read-only.
+- OPEN: hasil scan checker terus berjalan tetapi override tetap punya prioritas dalam Final Fisik.
+- Close & Finalisasi tetap mengikuti alur existing (hanya CLOSED bisa Finalize).
+- Validasi batch: duplikat, kode tidak ditemukan, atau kode ambigu menggagalkan seluruh batch.
+- Kode Excel berawalan nol: format kolom Item Code sebagai TEXT. Jika Excel menghilangkan nol, sistem hanya mencocokkan bila kode yang dinormalisasi unik.
+
+PENGUJIAN:
+1) Saat OPEN, override item tunggal, pastikan Final Fisik mengikuti override.
+2) Upload XLSX 3 kolom sebanyak 2-3 baris, lihat hasil/audit.
+3) Pastikan nilai scan fisik asli tidak berubah.
+4) Coba file dengan kode salah/duplikat, tidak boleh ada item diubah.
+5) Coba CLOSE lalu FINALIZE dan pastikan edit/override massal tidak muncul setelah FINALIZED.
+
+TIDAK ADA migration, composer install, atau perubahan skema database.
+Installer melakukan backup *.before-open-override.bak pada dua file existing yang dimodifikasi.
+Jika project lokal berbeda dan installer melaporkan FORMAT BERBEDA, STOP: jangan mengubah file secara manual tanpa inspeksi.

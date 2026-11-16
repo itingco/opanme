@@ -1,11 +1,25 @@
-OPANME — PATCH LABEL SATUAN-QTY
-Dasar: opanme_patch_label_satuan_barcode_2026-10-29.zip harus sudah dipasang.
-Perubahan hanya:
-- app/Http/Controllers/Label/LabelController.php
-- public/label-assets/js/item-lookup.js
-- resources/views/label/index.blade.php
-- resources/views/label/print.blade.php
-QR: BARCODE-QTY apabila satuan/barcode master dipilih; fallback KODEBARANG-QTY.
-Server menolak QR buatan yang kebetulan sudah terdaftar utuh sebagai barcode master.
-Contoh BOX barcode 899002 qty 5 => QR 899002-5.
-Jalankan php artisan optimize:clear setelah menimpa folder.
+PATCH OPNAME - SEARCH + BULK OVERRIDE (berdasarkan itingco/opanme main, 16 Nov 2026)
+
+1. Backup project Laravel lokal dan database sebelum uji.
+2. Extract ZIP ini ke root Laravel (folder yang berisi artisan).
+3. Jalankan di terminal root project: php APPLY_PATCH.php
+4. Jalankan: php artisan optimize:clear
+5. Login sebagai ADMIN. Buka cycle -> Summary.
+6. Search code/nama pada toolbar -> Terapkan (mencari seluruh halaman pagination).
+7. Setelah cycle CLOSED, klik Override Massal, pilih satu warehouse,
+   paste 3 kolom Excel: ItemCode<TAB>Qty Override<TAB>Remarks.
+   Atau ketik: 00072;2;Hasil recount
+8. Klik Simpan Semua Override. Jika salah satu item tidak ditemukan/duplikat,
+   seluruh batch dibatalkan tanpa mengubah data.
+
+KETERANGAN:
+- Maksimal 500 baris; nilai qty >=0, maksimal 4 angka desimal.
+- Item code disimpan sebagai string: nol di depan tetap dibaca.
+- Override massal khusus item ERP, bukan Non-System.
+- Warehouse wajib dipilih; tidak mungkin update Semua Warehouse sekaligus.
+- Final fisik memakai override yang ada; scan asli tidak berubah.
+- Tidak ada migration atau composer install.
+- Installer memodifikasi tepat 3 file existing dan backup otomatis.
+- Pencarian berlaku pada summary; export tetap mengikuti filter warehouse/selisih,
+  tetapi belum menerapkan kata kunci search.
+- Belum dapat diuji terintegrasi dengan DB produksi pengguna.

@@ -61,19 +61,6 @@ async function initScanner(root) {
             successFeedbackTimer = null;
         }, 1100);
     }
-OLD,
-        ],
-        [
-            <<<'OLD'
-        feedback('idle','Memproses...', barcode);
-OLD,
-            <<<'NEW'
-        if (successFeedbackTimer !== null) {
-            clearTimeout(successFeedbackTimer);
-            successFeedbackTimer = null;
-        }
-        feedback('idle','Memproses...', barcode);
-
     function updateConversion() {
         if (!nsQty || !nsUom || !nsRatio || !nsSmallest || !nsConversion) return;
         const qty = Number(nsQty.value || 0);
@@ -218,25 +205,56 @@ OLD,
     nonSystemModal?.addEventListener('click', e => { if (e.target === nonSystemModal) closeNonSystem(); });
     document.addEventListener('keydown', e => { if (e.key === 'Escape' && nonSystemOpen) closeNonSystem(); });
 
+    // Camera initialization with explicit diagnostics and recovery.
     startBtn?.addEventListener('click', async () => {
+        if (!startBtn || startBtn.disabled) return;
+        if (!window.isSecureContext && !['localhost', '127.0.0.1'].includes(location.hostname)) {
+            feedback('error', 'Kamera diblokir browser', 'Buka aplikasi menggunakan HTTPS. Akses kamera dari HTTP di HP biasanya ditolak.');
+            return;
+        }
+        if (!navigator.mediaDevices?.getUserMedia) {
+            feedback('error', 'Kamera tidak tersedia', 'Browser tidak mendukung akses kamera atau izin kamera diblokir. Gunakan Chrome/Safari terbaru.');
+            return;
+        }
+        if (typeof BrowserMultiFormatReader !== 'function') {
+            feedback('error', 'Library scanner gagal dimuat', 'Pastikan assets/vendor/zxing-browser.min.js tersedia dan refresh halaman (Ctrl+F5).');
+            return;
+        }
         startBtn.disabled = true;
-        startBtn.textContent = 'Membuka kamera...';
+        startBtn.textContent = 'Menghubungkan kamera...';
+        feedback('idle', 'Meminta izin kamera', 'Izinkan akses kamera ketika browser meminta izin.');
         try {
-            const reader = new BrowserMultiFormatReader(undefined, { delayBetweenScanAttempts: 120 });
-            controls = await reader.decodeFromConstraints(
-                { audio: false, video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } } },
-                video,
-                result => { if (result) submitBarcode(result.getText()); }
-            );
+            const reader = new BrowserMultiFormatReader(undefined, { delayBetweenScanAttempts: 150 });
+            // Prefer back camera but do not force 1280x720; some phones reject it.
+            try {
+                controls = await reader.decodeFromConstraints(
+                    { audio: false, video: { facingMode: { ideal: 'environment' } } },
+                    video,
+                    (result) => { if (result) submitBarcode(result.getText()); }
+                );
+            } catch (firstError) {
+                // Fallback for devices that cannot fulfill facingMode constraints.
+                controls = await reader.decodeFromConstraints(
+                    { audio: false, video: true },
+                    video,
+                    (result) => { if (result) submitBarcode(result.getText()); }
+                );
+            }
             startBtn.style.display = 'none';
-            feedback('idle','Kamera aktif','Arahkan barcode ke area scan.');
-        } catch (e) {
+            feedback('idle', 'Kamera aktif', 'Arahkan barcode ke area scan.');
+        } catch (error) {
+            const name = error?.name || '';
+            let detail = error?.message || String(error);
+            if (name === 'NotAllowedError' || name === 'PermissionDeniedError') detail = 'Izin kamera ditolak. Buka pengaturan situs pada browser lalu izinkan Kamera.';
+            else if (name === 'NotFoundError' || name === 'DevicesNotFoundError') detail = 'Perangkat kamera tidak ditemukan.';
+            else if (name === 'NotReadableError' || name === 'TrackStartError') detail = 'Kamera sedang digunakan aplikasi lain. Tutup aplikasi kamera lain lalu coba lagi.';
+            feedback('error', 'Gagal membuka kamera', detail);
             startBtn.disabled = false;
             startBtn.textContent = 'Coba Kamera Lagi';
-            feedback('error','Kamera tidak tersedia','Gunakan Chrome/HTTPS atau scanner/input barcode di bawah.');
+            startBtn.style.display = '';
+            console.error('Legacy checker camera:', error);
         }
     });
-
     window.addEventListener('beforeunload', () => controls?.stop());
     if (window.matchMedia('(pointer:fine)').matches) setTimeout(() => input?.focus({preventScroll:true}), 250);
 }

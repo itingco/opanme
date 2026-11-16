@@ -1,0 +1,32 @@
+PATCH V5: QR CODE ~ QTY UNTUK IMPORT OVERRIDE MASSAL
+
+Untuk project itingco/opanme yang sudah memasang patch V2 (Upload Excel dan Override OPEN) sebelumnya.
+
+PERUBAHAN FILE (1):
+app/Http/Controllers/Admin/BulkCycleOverrideController.php
+
+CARA PASANG
+1. Backup file controller tersebut pada project lokal.
+2. Copy folder app dari ZIP ini ke root project Laravel (sejajar artisan).
+3. Jika ditanya apakah mengganti file, pilih Yes/Replace.
+4. Jalankan php artisan optimize:clear
+5. Uji pada cycle OPEN/CLOSED, warehouse yang benar.
+
+FORMAT YANG DIDUKUNG (XLSX SHEET 1 / PASTE):
+A) Item Code | Qty Override | Remarks
+   AAC1408   | 5            | Hasil hitung ulang
+B) QR Code       | Remarks
+   AAC1408~5     | Hasil hitung ulang
+C) QR Code       | Qty Override | Remarks
+   AAC1408~5     | [kosong]     | Hasil hitung ulang
+   AAC1408~5     | 5            | Hasil hitung ulang
+
+QR CODE = KODEBARANG~QTY. Qty diambil dari bagian sesudah tanda ~.
+Jika Qty Override di kolom B diisi dan berbeda dengan qty QR, baris akan ditolak agar tidak salah update.
+Kode item yang sama pada lebih dari satu baris akan ditolak; gabungkan qty secara manual terlebih dahulu.
+Qty harus non-negatif, maksimal 4 desimal. Remarks wajib.
+Excel dibaca dari worksheet pertama dan pembatas lain di backend tetap aktif (maks 500 item, hanya ERP dan warehouse terpilih, status OPEN/CLOSED).
+Tidak perlu migration. Tidak mengubah alur scanner legacy atau FINALIZED.
+
+CATATAN: Patch ini hanya untuk bulk override Excel pada Summary, bukan untuk export Excel atau scan QR lewat kamera.
+Pengujian end-to-end dengan database lokal tetap diperlukan.

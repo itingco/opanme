@@ -39,18 +39,42 @@ class BulkCycleOverrideController extends Controller
             $line = $row['line'];
             $columns = array_map('trim', $row['cols']);
             $header = strtolower(preg_replace('/[^a-z0-9]/', '', $columns[0] ?? ''));
-            if ($header === 'itemcode' && $line <= 2) continue;
-            if (count($columns) !== 3) {
-                $errors[] = "Baris $line: wajib tepat tiga kolom.";
-                continue;
+            if (in_array($header, ['itemcode', 'qrcode', 'qr'], true) && $line <= 2) continue;
+
+            // Format lama: Item Code | Qty Override | Remarks.
+            // Format QR:   ItemCode~Qty | Remarks (atau ItemCode~Qty | [kosong] | Remarks).
+            // Tanda ~ memisahkan kode item dengan kuantitas; tidak ikut dicari ke ERP.
+            $first = $columns[0] ?? '';
+            if (str_contains($first, '~')) {
+                if (substr_count($first, '~') !== 1) {
+                    $errors[] = "Baris $line: QR harus berbentuk KODEBARANG~QTY (satu tanda ~).";
+                    continue;
+                }
+                [$code, $qty] = array_map('trim', explode('~', $first, 2));
+                if (count($columns) === 2 || (count($columns) === 3 && $columns[2] === '' && $columns[1] !== '')) {
+                    $remark = $columns[1];
+                } elseif (count($columns) === 3 && $columns[1] === '') {
+                    $remark = $columns[2];
+                } elseif (count($columns) === 3 && $columns[1] === $qty) {
+                    // Mendukung file 3 kolom jika nilai qty kedua sama dengan qty QR.
+                    $remark = $columns[2];
+                } else {
+                    $errors[] = "Baris $line: QR memakai format KODE~QTY | Remarks; Qty Override terpisah harus kosong atau sama dengan Qty QR.";
+                    continue;
+                }
+            } else {
+                if (count($columns) !== 3) {
+                    $errors[] = "Baris $line: format biasa wajib tepat tiga kolom (Item Code, Qty Override, Remarks).";
+                    continue;
+                }
+                [$code, $qty, $remark] = $columns;
             }
-            [$code, $qty, $remark] = $columns;
             if ($code === '' || strlen($code) > 100 || !preg_match('/^\d+(?:\.\d{1,4})?$/', $qty) || $remark === '' || strlen($remark) > 2000) {
                 $errors[] = "Baris $line: Item Code, Qty (0 atau positif, maks 4 desimal), atau Remarks tidak valid.";
                 continue;
             }
             if (array_key_exists($code, $entries)) {
-                $errors[] = "Baris $line: kode $code duplikat.";
+                $errors[] = "Baris $line: kode $code duplikat. Gabungkan Qty terlebih dahulu agar override tidak ambigu.";
                 continue;
             }
             $entries[$code] = ['qty' => $qty, 'remark' => $remark];

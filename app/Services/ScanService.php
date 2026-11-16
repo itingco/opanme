@@ -77,22 +77,9 @@ class ScanService
             ];
         }
 
-        try {
-            $item = $this->catalog->findItemByCodeAndUom(
-                $session->cycle->source_database,
-                $mapping->item_code,
-                $mapping->uom_code
-            );
-        } catch (UnexpectedValueException $e) {
-            throw ValidationException::withMessages(['barcode' => $e->getMessage()]);
-        }
-
-        if (! $item) {
-            throw ValidationException::withMessages([
-                'barcode' => "Master barcode {$barcode} mengarah ke {$mapping->item_code} / {$mapping->uom_code}, tetapi ItemCode/UOM tersebut tidak ditemukan di ERP {$session->cycle->source_database}.",
-            ]);
-        }
-
+        // Data barang berasal dari snapshot yang sudah tersimpan untuk cycle ini.
+        // Tidak ada query ulang ke AS_INGCO / AS_SMI pada setiap scan barcode.
+        $item = $this->resolveCycleSnapshotItem($session, (string) $mapping->item_code, (string) $mapping->uom_code);
         $ratio = UomRatio::query()
             ->where('item_code', strtoupper(trim((string) $mapping->item_code)))
             ->where('uom_code', strtoupper(trim((string) $mapping->uom_code)))
@@ -323,21 +310,9 @@ class ScanService
      */
     private function scanQrPayload(User $checker, ScanSession $session, string $rawValue, array $qr): array
     {
-        try {
-            $item = $this->catalog->findItemByCode(
-                $session->cycle->source_database,
-                $qr['item_code']
-            );
-        } catch (UnexpectedValueException $e) {
-            throw ValidationException::withMessages(['barcode' => $e->getMessage()]);
-        }
-
-        if (! $item) {
-            throw ValidationException::withMessages([
-                'barcode' => "Kode barang {$qr['item_code']} dari label tidak ditemukan di ERP {$session->cycle->source_database}.",
-            ]);
-        }
-
+        // QR KODE~QTY adalah qty dalam smallest UOM; ambil identitas barang
+        // dari snapshot cycle, bukan koneksi langsung ke ERP.
+        $item = $this->resolveCycleSnapshotItem($session, (string) $qr['item_code'], null);
         $qty = (float) $qr['qty'];
         $transaction = DB::transaction(function () use ($checker, $session, $rawValue, $item, $qty): ScanTransaction {
             $cycle = StockOpnameCycle::query()->sharedLock()->findOrFail($session->cycle_id);
@@ -374,6 +349,41 @@ class ScanService
         ];
     }
 
+    /**
+     * Ambil identitas item dari snapshot cycle, atau riwayat scan cycle yang sama.
+     * Tidak terhubung ke AS_INGCO / AS_SMI. Ratio diambil dari ItemRatio lokal.
+     */
+    private function resolveCycleSnapshotItem(ScanSession $session, string $itemCode, ?string $uomCode): array
+    {
+        $itemCode = strtoupper(trim($itemCode));
+        $item = DB::table('stock_snapshots')
+            ->where('cycle_id', $session->cycle_id)
+            ->whereRaw('UPPER(item_code) = ?', [$itemCode])
+            ->orderByRaw('CASE WHEN warehouse_id = ? THEN 0 ELSE 1 END', [$session->warehouse_id])
+            ->first(['item_id', 'item_code', 'item_name']);
+
+        if (! $item) {
+            $item = DB::table('scan_transactions')
+                ->where('cycle_id', $session->cycle_id)
+                ->whereRaw('UPPER(item_code) = ?', [$itemCode])
+                ->orderByDesc('id')
+                ->first(['item_id', 'item_code', 'item_name']);
+        }
+
+        if (! $item) {
+            throw ValidationException::withMessages([
+                'barcode' => "Item {$itemCode} tidak ditemukan pada snapshot cycle ini. Pastikan master/snapshot cycle sudah lengkap.",
+            ]);
+        }
+
+        return [
+            'item_id' => (int) $item->item_id,
+            'item_code' => (string) $item->item_code,
+            'item_name' => (string) $item->item_name,
+            'uom_level' => 1,
+            'uom_code' => $uomCode === null ? 'PCS' : strtoupper(trim($uomCode)),
+        ];
+    }
     private function assertActiveAssignedSession(User $checker, ScanSession $session): void
     {
         $session->loadMissing(['cycle', 'warehouse']);

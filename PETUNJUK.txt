@@ -1,25 +1,40 @@
-PATCH OPNAME - SEARCH + BULK OVERRIDE (berdasarkan itingco/opanme main, 16 Nov 2026)
+PATCH V3 — PERBAIKAN OVERRIDE PER ITEM SAAT OPEN
 
-1. Backup project Laravel lokal dan database sebelum uji.
-2. Extract ZIP ini ke root Laravel (folder yang berisi artisan).
-3. Jalankan di terminal root project: php APPLY_PATCH.php
+KASUS:
+Pada tabel Summary ketika cycle berstatus OPEN, kolom Override / Audit hanya menampilkan "Belum ada scan". Tombol "Override / Audit" disembunyikan oleh kondisi STATUS_CLOSED di Blade meskipun backend sebelumnya sudah diubah.
+
+ISI:
+APPLY_FIX_OPEN_ROW.php (installer aman, menyesuaikan dua file existing).
+
+FILE YANG DIUBAH DI PROJECT LOKAL:
+1. resources/views/admin/cycles/summary.blade.php
+2. app/Http/Controllers/Admin/CycleController.php
+
+CARA PASANG (setelah patch V1 dan V2 sebelumnya):
+1. Backup project/database.
+2. Ekstrak file ZIP ini ke root Laravel, folder yang berisi artisan.
+3. Jalankan: php APPLY_FIX_OPEN_ROW.php
 4. Jalankan: php artisan optimize:clear
-5. Login sebagai ADMIN. Buka cycle -> Summary.
-6. Search code/nama pada toolbar -> Terapkan (mencari seluruh halaman pagination).
-7. Setelah cycle CLOSED, klik Override Massal, pilih satu warehouse,
-   paste 3 kolom Excel: ItemCode<TAB>Qty Override<TAB>Remarks.
-   Atau ketik: 00072;2;Hasil recount
-8. Klik Simpan Semua Override. Jika salah satu item tidak ditemukan/duplikat,
-   seluruh batch dibatalkan tanpa mengubah data.
+5. Refresh browser dengan Ctrl+F5.
 
-KETERANGAN:
-- Maksimal 500 baris; nilai qty >=0, maksimal 4 angka desimal.
-- Item code disimpan sebagai string: nol di depan tetap dibaca.
-- Override massal khusus item ERP, bukan Non-System.
-- Warehouse wajib dipilih; tidak mungkin update Semua Warehouse sekaligus.
-- Final fisik memakai override yang ada; scan asli tidak berubah.
-- Tidak ada migration atau composer install.
-- Installer memodifikasi tepat 3 file existing dan backup otomatis.
-- Pencarian berlaku pada summary; export tetap mengikuti filter warehouse/selisih,
-  tetapi belum menerapkan kata kunci search.
-- Belum dapat diuji terintegrasi dengan DB produksi pengguna.
+PERILAKU:
+- OPEN: tombol Override / Audit muncul untuk setiap baris ERP dan Non-System walaupun 0 scan.
+- OPEN / CLOSED: admin dapat Simpan Override dan Hapus Override, termasuk pada baris yang belum discan.
+- Saat OPEN, Scan Fisik tetap bisa bertambah; Final Fisik tetap menggunakan override selama ada.
+- FINALIZED: readonly seperti sebelumnya.
+- Proses CLOSE dan FINALIZE tidak diubah.
+- Tidak ada migration database, perubahan composer, atau reset data.
+
+UJICOBA:
+1. Pilih cycle OPEN lalu buka halaman Summary.
+2. Di baris dengan "Belum ada scan", pastikan tombol "Override / Audit" muncul.
+3. Set Qty Override = 0 dan comment, simpan. Pastikan Final Fisik = 0, tetapi nilai Override tampil 0 (bukan '-').
+4. Set Qty Override = 5, lalu cek Final Fisik = 5.
+5. Hapus override dan pastikan Final Fisik kembali ke Scan Fisik.
+6. Close cycle, edit override tetap diperbolehkan.
+7. Finalize cycle, edit override harus hilang.
+
+CATATAN:
+Installer membuat file *.before-fix-open-row-YYYYMMDDHHMMSS.bak untuk setiap file yang dimodifikasi.
+Installer hanya mengubah kondisi di editor yang relevan; kondisi khusus finalisasi tetap utuh.
+Jika muncul FORMAT BERBEDA/ERROR, installer tidak menimpa file, dan project lokal perlu disesuaikan.

@@ -50,6 +50,29 @@ async function initScanner(root) {
     let lastCode = '';
     let lastAcceptedAt = 0;
     let controls = null;
+    // Feedback sukses hanya sesaat; lalu kembali ke kondisi siap scan.
+    let successFeedbackTimer = null;
+
+    function showBriefSuccess(title, message) {
+        if (successFeedbackTimer !== null) clearTimeout(successFeedbackTimer);
+        feedback('success', title, message);
+        successFeedbackTimer = setTimeout(() => {
+            feedback('idle', 'Siap scan', 'Arahkan kamera ke barcode barang berikutnya.');
+            successFeedbackTimer = null;
+        }, 1100);
+    }
+OLD,
+        ],
+        [
+            <<<'OLD'
+        feedback('idle','Memproses...', barcode);
+OLD,
+            <<<'NEW'
+        if (successFeedbackTimer !== null) {
+            clearTimeout(successFeedbackTimer);
+            successFeedbackTimer = null;
+        }
+        feedback('idle','Memproses...', barcode);
 
     function updateConversion() {
         if (!nsQty || !nsUom || !nsRatio || !nsSmallest || !nsConversion) return;
@@ -99,7 +122,8 @@ async function initScanner(root) {
         const barcode = String(raw || '').trim();
         if (!barcode || busy || nonSystemOpen) return;
         const now = Date.now();
-        if (barcode === lastCode && now - lastAcceptedAt < 1200) return;
+        // Hindari pengulangan karena kamera masih melihat barcode yang sama.
+        if (barcode === lastCode && now - lastAcceptedAt < 2500) return;
         busy = true;
         feedback('idle','Memproses...', barcode);
         try {
@@ -125,7 +149,7 @@ async function initScanner(root) {
             }
             lastCode = barcode;
             lastAcceptedAt = Date.now();
-            feedback('success', `${d.item_code} · ${d.uom_code}`, d.item_name || 'Scan berhasil');
+            showBriefSuccess(`${d.item_code} · ${d.uom_code}`, d.item_name || 'Scan berhasil');
             signal(true);
         } catch (e) {
             const message = e.payload?.errors?.barcode?.[0] || e.payload?.message || e.message || 'Scan gagal diproses.';
@@ -177,7 +201,7 @@ async function initScanner(root) {
             lastCode = d.barcode || nsBarcode.value;
             lastAcceptedAt = Date.now();
             closeNonSystem();
-            feedback('success', `NON-SYSTEM · ${d.uom_code}`, `${d.item_name} · Qty ${d.qty}`);
+            showBriefSuccess(`${d.item_code || d.barcode} · ${d.uom_code}`, `${d.item_name} · Qty ${d.qty}`);
             signal(true);
         } catch (e) {
             const errors = e.payload?.errors ? Object.values(e.payload.errors).flat() : [];

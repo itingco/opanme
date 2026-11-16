@@ -57,10 +57,16 @@ class ScanService
                 ->where('alias_code', $barcode)
                 ->first();
 
+            // Barang Non-System yang sudah ditemukan dalam cycle ini diproses
+            // otomatis sebagai scan tambahan (1 UOM per scan). Tidak membuka form lagi.
+            if ($discovered !== null) {
+                return $this->scanKnownNonSystem($checker, $session, $discovered);
+            }
+
             return [
                 'ok' => false,
                 'requires_non_system' => true,
-                'known_non_system' => $discovered !== null,
+                'known_non_system' => false,
                 'barcode' => $barcode,
                 'item_name' => $discovered?->item_name,
                 'uom_code' => $discovered?->default_uom_code ?? 'PCS',
@@ -129,6 +135,72 @@ class ScanService
             'uom_code' => $transaction->uom_code,
             'scanned_at' => $transaction->scanned_at?->format('H:i:s'),
         ];
+    }
+
+    /**
+     * Scan ulang barcode Non-System yang sudah terdaftar untuk cycle aktif.
+     * Tiap scan menambah 1 default UOM; qty dalam smallest UOM memakai ratio tersimpan.
+     * Tidak mengambil data barang yang ditemukan di cycle lain.
+     */
+    private function scanKnownNonSystem(
+        User $checker,
+        ScanSession $session,
+        StockOpnameDiscoveredItem $known
+    ): array {
+        return DB::transaction(function () use ($checker, $session, $known): array {
+            $cycle = StockOpnameCycle::query()->sharedLock()->findOrFail($session->cycle_id);
+            if ($cycle->status !== StockOpnameCycle::STATUS_OPEN) {
+                throw ValidationException::withMessages([
+                    'barcode' => 'Cycle stock opname sudah ditutup.',
+                ]);
+            }
+
+            // Periksa ulang di dalam transaksi agar tidak ada kebocoran antar cycle.
+            $discovered = StockOpnameDiscoveredItem::query()
+                ->where('cycle_id', $cycle->id)
+                ->whereKey($known->id)
+                ->firstOrFail();
+
+            $uom = $this->uom((string) $discovered->default_uom_code);
+            $smallest = $this->uom((string) $discovered->smallest_uom_code);
+            $ratio = $uom === $smallest ? 1.0 : (float) $discovered->default_ratio_to_smallest;
+            if (! is_finite($ratio) || $ratio <= 0) {
+                throw ValidationException::withMessages([
+                    'barcode' => 'Ratio Non-System tidak valid. Hubungi admin.',
+                ]);
+            }
+
+            $physicalQty = $this->nonSystemQty->toSmallest(1, $ratio);
+            $scan = DiscoveredScanTransaction::create([
+                'cycle_id' => $cycle->id,
+                'discovered_item_id' => $discovered->id,
+                'scan_session_id' => $session->id,
+                'warehouse_id' => $session->warehouse_id,
+                'checker_id' => $checker->id,
+                'location' => $session->location,
+                'input_qty' => 1,
+                'input_uom_code' => $uom,
+                'smallest_uom_code' => $smallest,
+                'ratio_used' => $ratio,
+                'physical_qty' => $physicalQty,
+                'scanned_at' => now(),
+            ]);
+
+            return [
+                'ok' => true,
+                'non_system' => true,
+                'auto_non_system' => true,
+                'barcode' => $discovered->alias_code,
+                // Alias barcode menjadi kode barang lokal untuk cycle ini.
+                'item_code' => $discovered->alias_code,
+                'item_name' => $discovered->item_name,
+                'uom_code' => $uom,
+                'qty' => '1.0000',
+                'smallest_uom_code' => $smallest,
+                'physical_qty' => $physicalQty,
+                'scanned_at' => $scan->scanned_at?->format('H:i:s'),
+            ];
+        });
     }
 
     public function storeNonSystemScan(User $checker, ScanSession $session, array $data): array
@@ -235,7 +307,8 @@ class ScanService
             'ok' => true,
             'non_system' => true,
             'barcode' => $discovered->alias_code,
-            'item_code' => 'NON-SYSTEM',
+            // Tampilkan barcode temuan sebagai kode barang lokal (khusus cycle ini).
+            'item_code' => $discovered->alias_code,
             'item_name' => $discovered->item_name,
             'uom_code' => $scan->input_uom_code,
             'qty' => number_format((float) $scan->input_qty, 4, '.', ''),

@@ -1,97 +1,41 @@
-OPNAME - UPDATE SAMPLING VALIDATION MODAL
-=========================================
+PATCH V11 — FIX HALAMAN CHECKER /checker/sessions/{session}/scan
 
-Basis project:
-https://github.com/itingco/opanme.git
-Branch: main
-Referensi commit saat analisis: c754bd4 (update changepassword)
+PENYEBAB
+Screenshot menggunakan route checker.scan (/checker/sessions/3/scan),
+sedangkan patch V8/V9 menambahkan antarmuka terutama di warehouse.legacy.scan.
+Perubahan V11 memasang UI di resources/views/checker/scan.blade.php yang benar-benar dipakai route checker.scan.
 
-TUJUAN
-------
-Saat barcode Sampling Check berhasil ditemukan, validasi stok sekarang langsung
-muncul sebagai modal wajib. User tidak perlu scroll ke bawah lagi.
+FITUR
+1) Baca dari Kamera: ambil foto dari video scanner aktif, decode kode lokal atau AI opsional, konfirmasi dulu.
+2) Ambil / Pilih Foto: pilih atau ambil gambar di HP, decode lalu konfirmasi.
+3) Barang tanpa Barcode: isi Item Code + Qty + foto bukti wajib; foto disimpan privat dan transaksi masuk scan cycle aktif.
+4) Form barcode tetap tersedia, tetapi judul menjadi "Scan barcode (jika ada)".
+5) Route /checker dan /warehouse-legacy-checker memakai controller yang sama untuk input manual.
 
-FLOW BARU
----------
-1. Scan / input barcode.
-2. Jika item ditemukan, modal "Validasi Stok Fisik" langsung muncul.
-3. Modal tidak memiliki tombol X dan tidak bisa ditutup dari backdrop/ESC.
-4. Scanner dikunci selama validasi masih pending agar barcode lain tidak terbaca.
-5. Pilih:
-   - Stok Cocok -> langsung simpan MATCH.
-   - Ada Selisih -> isi Qty Fisik, lalu Simpan Hasil.
-6. Setelah berhasil tersimpan, modal menutup dan scanner aktif untuk item berikutnya.
-
-FILE YANG DIUBAH
-----------------
-resources/views/gerai/scan.blade.php
-resources/js/sampling.js
-resources/css/sampling.css
-
-FILE TEST BARU
---------------
-tests/static/sample_validation_modal_contract.php
-
-TIDAK ADA PERUBAHAN
--------------------
-- Database / migration
-- Route
-- SamplingController
-- SampleCheckingService
-- Model SampleCheck
-
-CARA COPY MANUAL
-----------------
-1. Backup terlebih dahulu 3 file existing:
-   resources/views/gerai/scan.blade.php
-   resources/js/sampling.js
-   resources/css/sampling.css
-
-2. Extract ZIP ini.
-
-3. Copy isi folder ZIP ke root project opanme Anda dan overwrite file dengan path
-   yang sama.
-
-4. File test boleh ikut dicopy:
-   tests/static/sample_validation_modal_contract.php
-
-5. Dari root project jalankan:
-
+INSTAL
+1. BACKUP project dan database.
+2. Extract isi ZIP langsung ke root project Laravel (sejajar artisan). Saat diminta, timpa file paket berikut bila sudah ada.
+3. Jalankan:
+   php INSTALL_V11.php
+   php artisan migrate
    php artisan optimize:clear
+   php artisan route:list --name=checker.manual-photo.store
+   php artisan route:list --name=checker.photo.read
+4. Refresh browser Ctrl+F5 dan buka URL /checker/sessions/{session}/scan.
 
-6. Untuk local development dengan Vite:
+FILE PAKET
+app/Http/Controllers/Checker/ManualPhotoCountController.php
+app/Http/Controllers/Checker/LegacyPhotoReadController.php
+database/migrations/2026_11_16_220000_create_stock_opname_manual_photo_evidence.php
+resources/views/checker/partials_manual_count.blade.php
+resources/views/checker/partials_photo_tools.blade.php
+public/assets/js/legacy-photo-scan.js
+INSTALL_V11.php (mengubah routes/web.php, routes/warehouse_sampling.php, resources/views/checker/scan.blade.php dan backup .before-v11)
 
-   npm install
-   npm run dev
-
-   ATAU untuk membuat asset production:
-
-   npm install
-   npm run build
-
-CATATAN:
-Jika node_modules sudah ada, npm install tidak wajib diulang. Cukup npm run dev
-atau npm run build sesuai cara Anda menjalankan project.
-
-TEST
-----
-Jalankan:
-
-   php tests/static/sample_validation_modal_contract.php
-   php tests/static/sample_scanner_contract.php
-   npm run build
-
-HASIL YANG DIHARAPKAN
----------------------
-- Scan item valid -> modal langsung tampil di tengah layar.
-- Tidak ada tombol untuk menutup modal tanpa validasi.
-- Klik backdrop / tekan ESC tidak menutup modal.
-- Saat modal terbuka, scan berikutnya diabaikan.
-- Stok Cocok -> data tersimpan, modal menutup, history bertambah.
-- Ada Selisih -> Qty Fisik wajib diisi, selisih ditampilkan, lalu disimpan.
-- Jika API gagal menyimpan, modal tetap terbuka dan pesan error tampil di modal.
-
-ROLLBACK
---------
-Kembalikan 3 file backup Anda. Tidak ada rollback database karena update ini tidak
-memakai migration.
+CATATAN
+- Foto bukti wajib untuk input tanpa barcode; data foto disimpan pada disk 'local', bukan URL public.
+- Form tanpa barcode hanya menerima Item Code dari stock_snapshots warehouse + cycle aktif.
+- API Vision bersifat opsional: set OPENAI_API_KEY jika ingin fallback; tanpa key decoder lokal tetap tersedia.
+- Foto pada fitur 'Baca dari Foto' hanyalah sarana membaca barcode, BUKAN bukti foto wajib untuk input tanpa barcode.
+- Jika user membuka /warehouse-legacy-checker/sessions/.../scan dan sudah ada V8/V9, kemungkinan tombol ganda; fokus perbaikan ini route /checker yang ditunjukkan screenshot. Jika perlu bersihkan extends legacy dari patch sebelumnya.
+- Tidak diuji dengan DB atau kamera HP produksi. Coba di lingkungan test dahulu.

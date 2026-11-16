@@ -165,9 +165,15 @@
                         <td><strong>{{ $row->warehouse_code }}</strong><small>{{ $row->warehouse_name }}</small></td>
                         <td>
                             <strong>{{ $row->item_code }}</strong>
+                            @if(!$isNonSystem)
+                                <small><a href="{{ route('admin.cycles.photo-evidence.index', [$cycle, $row->warehouse_id, $row->item_id]) }}" style="font-weight:700;text-decoration:underline">Detail & Foto Bukti</a></small>
+                            @endif
                             @if($isNonSystem)<span class="non-system-row-badge">NON-SYSTEM</span>@endif
                             <small>{{ $row->item_name }}</small>
                             @if($isNonSystem)<small>Smallest UOM: {{ $row->smallest_uom_code ?: 'PCS' }}</small>@endif
+                            @if(!$isNonSystem)
+                                <small><a href="{{ route('admin.cycles.summary.sampling-history', [$cycle, $row->warehouse_id, $row->item_id]) }}">Riwayat Sampling Gudang</a></small>
+                            @endif
                         </td>
                         <td class="audit-cell summary-action-col">
                             @if($cycle->status === \App\Models\StockOpnameCycle::STATUS_CLOSED)

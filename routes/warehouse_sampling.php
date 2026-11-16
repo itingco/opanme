@@ -43,4 +43,9 @@ Route::middleware(['auth', 'role:CHECKER_GUDANG'])->prefix('warehouse-legacy-che
     Route::get('/sessions/{session}/scan', [LegacyWarehouseCheckerController::class, 'scanPage'])->name('scan');
     Route::post('/sessions/{session}/scan', [ScanController::class, 'store'])->name('scan.store');
     Route::post('/sessions/{session}/scan/non-system', [ScanController::class, 'storeNonSystem'])->name('scan.non-system');
+    Route::post('/sessions/{session}/manual-photo', [\App\Http\Controllers\Checker\CameraManualController::class, 'store'])->name('camera-manual.store');
+    Route::post('/sessions/{session}/camera-ai', [\App\Http\Controllers\Checker\CameraAiReadController::class, '__invoke'])->name('camera-ai.read');
+    Route::post('/sessions/{session}/manual-photo', [\App\Http\Controllers\Checker\ManualPhotoCountController::class, 'store'])->name('manual-photo.store');
+    Route::post('/sessions/{session}/photo-read', \App\Http\Controllers\Checker\LegacyPhotoReadController::class)
+        ->middleware('throttle:12,1')->name('photo.read');
 });

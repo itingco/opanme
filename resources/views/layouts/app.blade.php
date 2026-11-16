@@ -109,7 +109,7 @@
 <div class="app-shell"><main class="page-wrap @yield('page-class')">@yield('content')</main></div>
 @endif
 <script src="{{ asset('assets/vendor/zxing-browser.min.js') }}?v=20260923"></script>
-<script src="{{ asset('assets/js/app.js') }}?v=20261116v6"></script>
+<script src="{{ asset('assets/js/app.js') }}?v=20261116v12"></script>
 @stack('scripts')
 </body>
 </html>

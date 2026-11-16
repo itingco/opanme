@@ -11,7 +11,28 @@ function feedback(type, title, message) {
     box.querySelector('span').textContent = message;
 }
 
+// Audio volume is limited by the browser and the phone's physical volume.
+window.opanmeLoudBeep = function () {
+    try {
+        const A = window.AudioContext || window.webkitAudioContext;
+        if (!A) return;
+        const ctx = window.__opnameAudioCtx || (window.__opnameAudioCtx = new A());
+        if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+        const t = ctx.currentTime;
+        [0, 0.13].forEach((offset, index) => {
+            const o = ctx.createOscillator(), g = ctx.createGain();
+            o.type = 'square'; o.frequency.value = index ? 1046 : 880;
+            g.gain.setValueAtTime(0.001, t+offset);
+            g.gain.exponentialRampToValueAtTime(0.24, t+offset+0.014);
+            g.gain.exponentialRampToValueAtTime(0.001, t+offset+0.11);
+            o.connect(g); g.connect(ctx.destination);
+            o.start(t+offset); o.stop(t+offset+0.12);
+        });
+        if (navigator.vibrate) navigator.vibrate([100,50,100]);
+    } catch(e) { console.debug('Audio not available', e); }
+};
 function signal(ok) {
+    if (ok) { window.opanmeLoudBeep(); return; }
     if (navigator.vibrate) navigator.vibrate(ok ? 70 : [100, 50, 100]);
     try {
         const Ctx = window.AudioContext || window.webkitAudioContext;
@@ -107,7 +128,7 @@ async function initScanner(root) {
 
     async function submitBarcode(raw) {
         const barcode = String(raw || '').trim();
-        if (!barcode || busy || nonSystemOpen) return;
+        if (!barcode || busy || nonSystemOpen || window.__opnameScannerPause) return;
         const now = Date.now();
         // Hindari pengulangan karena kamera masih melihat barcode yang sama.
         if (barcode === lastCode && now - lastAcceptedAt < 2500) return;
@@ -148,6 +169,7 @@ async function initScanner(root) {
         }
     }
 
+    window.__opnameSubmitCameraCode = submitBarcode;
     form?.addEventListener('submit', e => { e.preventDefault(); submitBarcode(input.value); });
 
     nonSystemForm?.addEventListener('submit', async e => {
@@ -206,6 +228,7 @@ async function initScanner(root) {
     document.addEventListener('keydown', e => { if (e.key === 'Escape' && nonSystemOpen) closeNonSystem(); });
 
     // Camera initialization with explicit diagnostics and recovery.
+    startBtn?.addEventListener('pointerdown', () => { try { const A = window.AudioContext || window.webkitAudioContext; if (A) { const ctx = window.__opnameAudioCtx || (window.__opnameAudioCtx = new A()); ctx.resume().catch(() => {}); } } catch(e) {} });
     startBtn?.addEventListener('click', async () => {
         if (!startBtn || startBtn.disabled) return;
         if (!window.isSecureContext && !['localhost', '127.0.0.1'].includes(location.hostname)) {

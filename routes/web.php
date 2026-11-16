@@ -286,6 +286,16 @@ Route::middleware(['auth', 'role:ADMIN'])
         Route::get('/cycles/{cycle}/final-report', [CycleController::class, 'finalReport'])
             ->name('cycles.final-report');
 
+        Route::get('/cycles/{cycle}/summary/sampling-history/{warehouseId}/{itemId}', [\App\Http\Controllers\Admin\CycleSamplingItemHistoryController::class, 'show'])->name('cycles.summary.sampling-history');
+        Route::get('/cycles/{cycle}/manual-photo/{scanId}', [\App\Http\Controllers\Admin\CycleSamplingItemHistoryController::class, 'photo'])->name('cycles.manual-photo');
+
+        Route::get('/cycles/{cycle}/warehouse/{warehouseId}/scan/{scanId}/photo', [\App\Http\Controllers\Checker\CameraManualController::class, 'adminPhoto'])
+            ->name('cycles.manual-photo.view');
+        // Admin photo audit: scoped to cycle + warehouse + item + scan.
+        Route::get('/cycles/{cycle}/warehouse/{warehouseId}/item/{itemId}/photo-evidence', [\App\Http\Controllers\Admin\CyclePhotoEvidenceController::class, 'index'])
+            ->name('cycles.photo-evidence.index');
+        Route::get('/cycles/{cycle}/warehouse/{warehouseId}/item/{itemId}/scan/{scanId}/photo-evidence', [\App\Http\Controllers\Admin\CyclePhotoEvidenceController::class, 'photo'])
+            ->name('cycles.photo-evidence.photo');
         Route::get('/cycles/{cycle}/summary', [CycleController::class, 'summary'])
             ->name('cycles.summary');
 
@@ -384,6 +394,13 @@ Route::middleware(['auth', 'role:CHECKER'])
             '/sessions/{session}/scan/non-system',
             [ScanController::class, 'storeNonSystem']
         )->name('scan.non-system');
+        Route::post('/sessions/{session}/manual-photo', [\App\Http\Controllers\Checker\CameraManualController::class, 'store'])
+            ->name('camera-manual.store');
+        Route::post('/sessions/{session}/camera-ai', [\App\Http\Controllers\Checker\CameraAiReadController::class, '__invoke'])
+            ->name('camera-ai.read');
+
+        Route::post('/sessions/{session}/manual-photo', [\App\Http\Controllers\Checker\ManualPhotoCountController::class, 'store'])->name('manual-photo.store');
+        Route::post('/sessions/{session}/photo-read', \App\Http\Controllers\Checker\LegacyPhotoReadController::class)->name('photo.read');
     });
 
 
@@ -455,3 +472,6 @@ Route::middleware(['auth', 'role:ADMIN'])
         Route::post('/preview', [LabelController::class, 'preview'])
             ->name('preview');
     });
+
+// Checker camera routes — V13 repair
+require __DIR__.'/checker_camera_v13.php';

@@ -91,7 +91,11 @@ class CycleSummaryService
             ->select('warehouse_id', 'item_id')
             ->where('cycle_id', $cycle->id);
 
-        $keys = $snapshotKeys->union($scanKeys);
+        $overrideKeys = DB::table('stock_opname_overrides')
+            ->select('warehouse_id', 'item_id')
+            ->where('cycle_id', $cycle->id);
+
+        $keys = $snapshotKeys->union($scanKeys)->union($overrideKeys);
 
         $scanAgg = DB::table('scan_transactions')
             ->selectRaw('warehouse_id, item_id, MAX(item_code) AS item_code, MAX(item_name) AS item_name, SUM(physical_qty) AS physical_qty, COUNT(*) AS scan_count')
@@ -114,6 +118,11 @@ class CycleSummaryService
                     ->on('so.item_id', '=', 'k.item_id')
                     ->where('so.cycle_id', '=', $cycle->id);
             })
+            ->leftJoin('stock_opname_override_item_details as oid', function ($join) use ($cycle) {
+                $join->on('oid.warehouse_id', '=', 'k.warehouse_id')
+                    ->on('oid.item_id', '=', 'k.item_id')
+                    ->where('oid.cycle_id', '=', $cycle->id);
+            })
             ->leftJoin('users as override_user', 'override_user.id', '=', 'so.updated_by')
             ->selectRaw(<<<'SQL'
                 'ERP' AS row_type,
@@ -124,8 +133,8 @@ class CycleSummaryService
                 k.item_id,
                 CAST(NULL AS BIGINT) AS discovered_item_id,
                 CAST(NULL AS VARCHAR) AS alias_code,
-                COALESCE(ss.item_code, sa.item_code) AS item_code,
-                COALESCE(ss.item_name, sa.item_name) AS item_name,
+                COALESCE(ss.item_code, sa.item_code, oid.item_code) AS item_code,
+                COALESCE(ss.item_name, sa.item_name, oid.item_name) AS item_name,
                 CAST(NULL AS VARCHAR) AS smallest_uom_code,
                 COALESCE(ss.opening_system_qty, 0) AS opening_system_qty,
                 ss.closing_system_qty,

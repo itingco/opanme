@@ -1,0 +1,35 @@
+PATCH V17 - BULK OVERRIDE 2000 ITEM + ERROR HANDLING
+Basis: itingco/opanme, branch main (17 November 2026)
+
+File berubah:
+- app/Http/Controllers/Admin/BulkCycleOverrideController.php
+- app/Services/BulkOverrideExcelReader.php
+- resources/views/admin/cycles/partials/summary-bulk-tools.blade.php
+
+INSTALASI
+1. Backup project dan database. Sebaiknya uji dulu pada staging.
+2. Extract ZIP lalu salin 3 path app/ dan resources/ ke root Laravel.
+3. Jalankan:
+   php artisan optimize:clear
+   php artisan route:list --name=cycles.summary.bulk-override
+4. Buka Summary > Override Massal dan uji 51, 500, serta 1000 item.
+
+Fitur:
+- Upload XLSX atau paste maksimal 2.000 item dalam satu batch.
+- Validasi semua input sebelum menulis; satu transaksi database untuk semua batch.
+- Simpan lewat upsert dalam chunk 100 baris.
+- Item code dipadankan ke snapshot dan scan cycle/warehouse yang dipilih, bukan query seluruh summary.
+- QR CODE~QTY didukung; komentar tetap wajib.
+- Status OPEN/CLOSED bisa override, FINALIZED tidak.
+- Error server ditulis ke storage/logs/laravel.log dan tampil pesan aman, bukan halaman error polos.
+
+PENTING
+Screenshot HTTP 500 tidak menampilkan exception asal, jadi sumber pasti belum diketahui.
+Jika masih gagal, cek log terbaru:
+  tail -n 100 storage/logs/laravel.log
+Jangan menyalakan APP_DEBUG=true di server produksi.
+Pastikan php.ini post_max_size dan upload_max_filesize cukup untuk file XLSX.
+Jika muncul error 'Allowed memory size exhausted' atau 'Maximum execution time exceeded',
+server mungkin perlu disesuaikan; patch saja tidak dapat menyelesaikan semua limit hosting.
+
+TIDAK PERLU migrate dan tidak mengubah tabel.

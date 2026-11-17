@@ -224,6 +224,13 @@
                                         @else
                                             <form method="POST" action="{{ route('admin.cycles.summary.override', [$cycle, $row->warehouse_id, $row->item_id]) }}">
                                                 @csrf @method('PUT')
+                                                <label>Metode Override
+    <select name="override_mode" required>
+        <option value="add" selected>Tambah Qty ke override sebelumnya</option>
+        <option value="replace">Ganti Qty override sebelumnya</option>
+    </select>
+    <small>Contoh: override lama 10, input 5 = 15 pada mode Tambah.</small>
+</label>
                                                 <label>Qty Override<input type="number" name="override_qty" min="0" step="0.0001" value="{{ $hasOverride ? (float) $row->override_qty : '' }}" required><small>Isi dalam smallest UOM yang sama dengan Opening.</small></label>
                                                 <label>Comment<textarea name="comment" rows="3" maxlength="2000" required>{{ $hasOverride ? $row->override_comment : '' }}</textarea></label>
                                                 <button class="btn primary small" type="submit">Simpan Override</button>

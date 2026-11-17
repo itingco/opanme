@@ -1,0 +1,36 @@
+PATCH V19 - OVERRIDE QTY BERTAHAP (untuk project yang SUDAH memasang V18)
+
+FITUR
+1. Override massal dan override satuan sekarang memiliki metode:
+   - Tambah Qty: override baru = override sebelumnya (atau 0) + qty input
+   - Ganti Qty: override baru = qty input
+2. Setiap penyimpanan mencatat action, sumber, batch, qty sebelum/input/akhir,
+   remarks, user, waktu pada stock_opname_override_history.
+3. Tidak menjumlahkan scan fisik; Qty Override tetap terpisah dari scan asli.
+4. Untuk batch 2.000 item, sistem menggunakan upsert dan 1 DB transaction.
+5. Hanya cycle OPEN atau CLOSED yang boleh diubah, FINALIZED terkunci.
+
+CARA INSTALL
+- Backup database dan file lokal terlebih dahulu.
+- Extract ZIP ke root Laravel, sejajar dengan file artisan.
+- Pastikan V18 telah terpasang dan migration V18 ada.
+- Jalankan:
+    php INSTALL_V19.php
+    php artisan migrate
+    php artisan optimize:clear
+- Validasi:
+    php artisan route:list --name=cycles.summary.bulk-override
+- Buka Summary dan coba mode Tambah Qty pada satu item.
+
+CONTOH
+Override sebelumnya = 10
+Upload Qty = 5, pilih Tambah Qty -> Override akhir 15
+Upload Qty = 3, pilih Tambah Qty -> Override akhir 18
+Upload Qty = 7, pilih Ganti Qty -> Override akhir 7
+
+PERHATIAN
+- Upload file yang sama 2 kali dalam mode TAMBAH akan menghitung 2 kali.
+  Cek hasil sebelum mengupload ulang. Tidak ada mekanisme pembatalan batch otomatis.
+- Input kode yang tidak ada di master ERP database cycle masih akan ditolak.
+- Riwayat tersimpan di database untuk audit; belum ditambahkan layar riwayat baru.
+- Pengujian sintaks PHP dan simulasi installer berhasil; database produksi belum diuji.

@@ -323,6 +323,7 @@ class CycleController extends Controller
         $data = $request->validate([
             'override_qty' => ['required', 'numeric', 'min:0'],
             'comment' => ['required', 'string', 'max:2000'],
+            'override_mode' => ['nullable', 'in:add,replace'],
         ], [
             'comment.required' => 'Comment wajib diisi untuk setiap override.',
         ]);
@@ -342,6 +343,14 @@ class CycleController extends Controller
 
             $warehouse = $locked->warehouses()->findOrFail($warehouseId);
             $this->ensureSummaryItemExists($locked, $warehouse->id, $itemId);
+            $previous = \App\Models\StockOpnameOverride::query()
+                ->where('cycle_id', $locked->id)->where('warehouse_id', $warehouse->id)
+                ->where('item_id', $itemId)->lockForUpdate()->first();
+            $before = $previous?->override_qty;
+            $mode = $data['override_mode'] ?? 'replace';
+            $finalQty = $mode === 'add'
+                ? number_format(round((float) ($before ?? 0) + (float) $data['override_qty'], 4), 4, '.', '')
+                : $data['override_qty'];
 
             StockOpnameOverride::updateOrCreate(
                 [
@@ -350,14 +359,20 @@ class CycleController extends Controller
                     'item_id' => $itemId,
                 ],
                 [
-                    'override_qty' => $data['override_qty'],
+                    'override_qty' => $finalQty,
                     'comment' => trim($data['comment']),
                     'updated_by' => $request->user()->id,
                 ]
             );
+            DB::table('stock_opname_override_history')->insert([
+                'cycle_id' => $locked->id, 'warehouse_id' => $warehouse->id, 'item_id' => $itemId,
+                'action' => $mode, 'source' => 'single', 'batch_id' => null,
+                'previous_qty' => $before, 'input_qty' => $data['override_qty'], 'result_qty' => $finalQty,
+                'comment' => trim($data['comment']), 'updated_by' => $request->user()->id, 'created_at' => now(),
+            ]);
         });
 
-        return back()->with('success', 'Override fisik berhasil disimpan. Hasil scan asli tidak diubah.');
+        return back()->with('success', 'Override berhasil disimpan. Hasil scan asli tidak diubah.');
     }
 
     public function deleteOverride(

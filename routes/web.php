@@ -475,3 +475,7 @@ Route::middleware(['auth', 'role:ADMIN'])
 
 // Checker camera routes — V13 repair
 require __DIR__.'/checker_camera_v13.php';
+
+require __DIR__.'/checker_item_lookup_v15.php';
+
+require __DIR__.'/checker_camera_fallback_v15.php';

@@ -6,6 +6,7 @@
 <div class="scanner-shell" id="v15-checker"
      data-item-lookup-url="{{ $legacy ? route('warehouse.legacy.manual-item.lookup', $session) : route('checker.manual-item.lookup', $session) }}"
      data-camera-manual-url="{{ $legacy ? route('warehouse.legacy.camera-manual.store', $session) : route('checker.camera-manual.store', $session) }}"
+     data-camera-barcode-lookup-url="{{ $legacy ? route('warehouse.legacy.camera-barcode.lookup', $session) : route('checker.camera-barcode.lookup', $session) }}"
      data-camera-ai-url="{{ $legacy ? route('warehouse.legacy.camera-ai.read', $session) : route('checker.camera-ai.read', $session) }}"
      data-scan-url="{{ $legacy ? route('warehouse.legacy.scan.store', $session) : route('checker.scan.store', $session) }}"
      data-non-system-url="{{ $legacy ? route('warehouse.legacy.scan.non-system', $session) : route('checker.scan.non-system', $session) }}">
@@ -21,7 +22,7 @@
         <div class="v16-video-wrap"><video id="v16-scanner-video" playsinline muted autoplay></video><div class="v16-guides" aria-hidden="true"></div><span class="v16-video-text" id="v16-video-text">Tekan Aktifkan Kamera untuk mulai scan</span></div>
         <div class="v16-camera-actions"><button class="btn primary" id="v16-camera-start" type="button">Aktifkan Kamera</button><button class="btn" id="v16-camera-stop" type="button" disabled>Matikan Kamera</button><button class="btn v16-photo-btn" id="v16-camera-read" type="button" disabled>📷 Ambil Gambar &amp; Baca AI</button></div>
         <p id="v16-camera-status" class="v16-status" role="status" aria-live="polite">Kamera belum aktif.</p>
-        <div id="v16-confirm" class="v16-confirm" hidden><label for="v16-ai-code">Hasil pembacaan barcode (periksa sebelum menyimpan)</label><div class="v16-confirm-row"><input id="v16-ai-code" maxlength="150" autocomplete="off" placeholder="Kode barcode / QR KODE~QTY"><button class="btn primary" id="v16-confirm-scan" type="button">Konfirmasi &amp; Proses</button><button class="btn" id="v16-cancel-read" type="button">Batal</button></div></div>
+        <div id="v16-confirm" class="v16-confirm" hidden><div id="v20-item-detail" role="status" style="margin-bottom:10px;font-size:13px;color:#123b68">Periksa data barang dari hasil pembacaan foto.</div><label for="v16-ai-code">Hasil pembacaan barcode (periksa sebelum menyimpan)</label><div class="v16-confirm-row"><input id="v16-ai-code" maxlength="150" autocomplete="off" placeholder="Kode barcode / QR KODE~QTY"><button class="btn primary" id="v16-confirm-scan" type="button">Konfirmasi &amp; Proses</button><button class="btn" id="v16-cancel-read" type="button">Batal</button></div></div>
     </section>
     <section class="v15-panel">
         <h2>Input Kode Barang (Tanpa Barcode)</h2>
@@ -79,5 +80,5 @@
 @endpush
 @push('scripts')
 <script src="{{ asset('assets/js/checker-manual-v15.js') }}?v=16.0" defer></script>
-<script src="{{ asset('assets/js/checker-camera-v16.js') }}?v=16.0" defer></script>
+<script src="{{ asset('assets/js/checker-camera-v16.js') }}?v=20.0" defer></script>
 @endpush

@@ -52,7 +52,39 @@
       }
       return data;
     }
-    function showNonSystem(payload, barcode) {
+    const itemDetail = $('v20-item-detail');
+    const lookupUrl = root.dataset.cameraBarcodeLookupUrl;
+    let verifiedCode = '';
+    function ignoreWebQr(code) { return /^https?:\/\//i.test(String(code || '').trim()); }
+    async function resolvePhotoCode(raw) {
+      const value = String(raw || '').trim();
+      verifiedCode = '';
+      confirm.disabled = true;
+      if (!value || ignoreWebQr(value)) {
+        itemDetail.textContent = ignoreWebQr(value) ? 'QR website (http/https) diabaikan.' : 'Kode kosong.';
+        return;
+      }
+      itemDetail.textContent = 'Memeriksa barcode ke master dan cycle aktif...';
+      try {
+        if (!lookupUrl) throw new Error('Route lookup barcode belum terpasang.');
+        const response = await fetch(lookupUrl + '?barcode=' + encodeURIComponent(value), {
+          credentials:'same-origin', headers:{Accept:'application/json'}
+        });
+        const info = await parseResponse(response);
+        if (!info.ok) throw new Error(info.message || 'Barcode tidak ditemukan.');
+        // TextContent prevents HTML injection from OCR or item names.
+        itemDetail.textContent = 'Kode Barang: ' + info.item_code + ' | Nama: ' + info.item_name
+          + ' | UOM: ' + info.uom_code + ' | Ratio: ' + info.ratio
+          + ' | Qty: ' + info.qty + ' | Qty Smallest: ' + info.physical_qty
+          + ' | Database: ' + info.source_database;
+        verifiedCode = value;
+        confirm.disabled = false;
+        setStatus('Barang cocok. Konfirmasi untuk mencatat scan.');
+      } catch (e) {
+        itemDetail.textContent = 'Tidak dapat dikonfirmasi: ' + e.message;
+        setStatus('Barcode tidak cocok. Foto ulang atau masukkan kode barang manual.');
+      }
+    }    function showNonSystem(payload, barcode) {
       if (!nsModal) throw new Error('Form Non-System belum tersedia.');
       // The V15 manual script already binds the Save button of this modal.
       $('v15-ns-barcode').value = barcode;
@@ -68,6 +100,7 @@
     }
     async function submitBarcode(barcode, origin = 'camera') {
       barcode = String(barcode || '').trim();
+      if (ignoreWebQr(barcode)) return; // Website QR is never submitted or counted.
       if (!barcode || busy || !running || !manualModal.hidden || !nsModal.hidden || !panel.hidden) return;
       if (barcode === recentValue && Date.now() - recentAt < 2800) return;
       busy = true;
@@ -196,19 +229,26 @@
           value = String(data.value || '').trim();
         }
         if (!value) throw new Error('Tidak ada kode yang berhasil dibaca. Coba foto ulang dengan cahaya lebih baik.');
+        if (ignoreWebQr(value)) { setStatus('QR mengarah ke website, diabaikan.'); return; }
         resultCode.value = value;
         panel.hidden = false;
-        setStatus('Hasil ditemukan. Periksa kode, lalu klik Konfirmasi & Proses.');
+        await resolvePhotoCode(value);
         resultCode.focus();
       } catch (e) { setStatus('Pembacaan foto gagal: ' + e.message); }
       finally { busy = false; refreshButtons(); }
     });
     confirm.addEventListener('click', async () => {
       const value = resultCode.value.trim();
+      if (value !== verifiedCode || confirm.disabled || ignoreWebQr(value)) { setStatus('Periksa data barang terlebih dahulu.'); return; }
       if (!/^[A-Za-z0-9._~\/-]{1,150}$/.test(value)) { setStatus('Format kode tidak valid.'); return; }
       panel.hidden = true;
       await submitBarcode(value, 'photo');
     });
+    resultCode.addEventListener('input', () => { verifiedCode = ''; confirm.disabled = true; itemDetail.textContent = 'Kode diedit. Klik Periksa Kode kembali.'; });
+    const recheck = document.createElement('button');
+    recheck.type = 'button'; recheck.className = 'btn'; recheck.textContent = 'Periksa Kode';
+    recheck.addEventListener('click', () => resolvePhotoCode(resultCode.value));
+    confirm.parentNode.appendChild(recheck);
     $('v16-cancel-read').addEventListener('click', () => { panel.hidden = true; });
     // V15 manual lookup opens its modal only AFTER item validation.
     // Stop barcode scanning while the manual camera uses the same physical device.

@@ -1,31 +1,31 @@
-PATCH V8 - BACA BARCODE DARI FOTO (CHECKER CYCLE LEGACY)
+PATCH V20 - OPANME CHECKER CAMERA AI + RIWAYAT SAMPLING
 
-FILE DIPAKAI (pertahankan struktur folder):
-- app/Http/Controllers/Checker/LegacyPhotoReadController.php (baru)
-- public/assets/js/legacy-photo-scan.js (baru)
-- resources/views/checker/warehouse-legacy-scan.blade.php (ditimpa)
-- APPLY_PHOTO_V8.php (installer perubahan satu route)
+Perubahan:
+1. Kamera: lewati QR URL http:// / https:// tanpa mengirim scan.
+2. Ambil Gambar & Baca AI: setelah OCR/BarcodeDetector, validasi barcode pada master ItemBarcode + ItemRatio dan snapshot cycle aktif; tampilkan kode, nama, UOM, ratio, qty sebelum tombol konfirmasi diaktifkan.
+3. Riwayat: tampilkan Sampling Gudang semua status, ditambah Sampling Gerai (sample_checks), berdasarkan database/item/ERP warehouse sama. Rentang default tetap tiga bulan, bisa pilih Semua Tanggal.
 
-SETUP:
-1. Backup file resources/views/checker/warehouse-legacy-scan.blade.php dan database.
-2. Salin isi ZIP ke root Laravel, SEJAJAR folder app dan file artisan.
-3. Jalankan php APPLY_PHOTO_V8.php
-4. Opsional AI: tambahkan OPENAI_API_KEY=... ke .env pada server (jangan commit token). Model default gpt-4.1-mini; opsional OPENAI_VISION_MODEL.
-5. php artisan optimize:clear
-6. php artisan route:list --name=photo.read
-7. Refresh halaman Checker Cycle Legacy. HTTPS dibutuhkan untuk kamera web pada HP.
+Pemasangan (backup database/kode lebih dulu):
+- Extract isi ZIP ini ke ROOT Laravel, sejajar dengan artisan.
+- php INSTALL_V20.php
+- php artisan optimize:clear
+- php artisan route:list --name=camera-barcode.lookup
 
-ALUR:
-- Kamera aktif: klik Baca dari Foto untuk mengambil 1 frame.
-- Kamera tidak aktif: tombol membuka native camera/photo picker.
-- BarcodeDetector lalu ZXing browser mencoba membaca gambar secara lokal.
-- Jika keduanya gagal, endpoint AI berbasis OpenAI API dicoba HANYA jika API key tersedia.
-- Kode hasil foto harus dikonfirmasi pengguna dan dikirim via form scan existing.
-- Tidak otomatis membuat transaksi dari jawaban AI; validasi dilakukan ScanService existing.
+PENTING: Jangan upload folder opanme_v20_patch sebagai subfolder. Isi folder itu yang harus ada di root project.
 
-CATATAN:
-- AI API menerima foto ke layanan pihak ketiga, pastikan kebijakan privasi internal mengizinkan.
-- AI tidak menjamin akurasi; operator wajib memeriksa kode.
-- Fitur ini tidak menambah database/migration, tidak mengubah scan normal, dan khusus Checker Cycle Legacy.
-- Paket tidak mengandung API key atau dependensi Composer.
-- Pengujian lapangan dengan kamera, API, dan database tetap diperlukan.
+Yang diperbarui langsung dengan salin file:
+ app/Http/Controllers/Checker/CameraBarcodeLookupController.php
+ app/Http/Controllers/Admin/CycleSamplingItemHistoryController.php
+ resources/views/admin/cycles/sampling-item-history.blade.php
+ routes/checker_camera_lookup_v20.php
+
+INSTALL_V20.php mengubah:
+ routes/web.php
+ resources/views/checker/scan.blade.php
+ public/assets/js/checker-camera-v16.js
+ app/Http/Controllers/Checker/CameraAiReadController.php
+File lama yang dimodifikasi installer dibackup dengan ekstensi .before-v20.
+
+Tidak ada migration.
+
+Catatan: Untuk barcode yang tidak cocok, jangan langsung diproses menjadi qty. Konfirmasi aktif hanya setelah lookup berhasil. Untuk pengujian pada server/staging, cek contoh barcode master, QR KODE~QTY, QR HTTPS, dan riwayat sampling yang belum CLOSED.

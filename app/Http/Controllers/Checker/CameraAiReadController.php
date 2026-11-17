@@ -57,6 +57,9 @@ class CameraAiReadController extends Controller
         if ($value === '' || strtoupper($value) === 'UNCLEAR' || ! preg_match('/^[A-Za-z0-9._~\/-]{1,150}$/D', $value)) {
             return response()->json(['ok' => false, 'message' => 'AI tidak yakin dengan nilai barcode. Silakan ulangi foto atau input kode barang.'], 422);
         }
+        if (preg_match('~^https?://~i', $value)) {
+            return response()->json(['ok' => false, 'message' => 'QR website diabaikan.'], 422);
+        }
         // This is a candidate only. Frontend MUST get explicit confirmation and call ScanService.
         return response()->json(['ok' => true, 'value' => $value, 'requires_confirmation' => true]);
     }

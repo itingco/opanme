@@ -479,3 +479,5 @@ require __DIR__.'/checker_camera_v13.php';
 require __DIR__.'/checker_item_lookup_v15.php';
 
 require __DIR__.'/checker_camera_fallback_v15.php';
+
+require __DIR__.'/checker_camera_lookup_v20.php';

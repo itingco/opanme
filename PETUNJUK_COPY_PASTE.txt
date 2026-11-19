@@ -1,0 +1,41 @@
+PATCH TAMBAHAN OPANME - TOMBOL BATAL DI CYCLE STOCK OPNAME
+========================================================
+Khusus untuk project opanme yang sudah memakai paket
+'opanme_cycle_gerai_4_fitur_copy_paste.zip' sebelumnya.
+
+CARA PASANG
+1. Backup source project Laravel dan database PostgreSQL.
+2. Ekstrak ZIP patch ini.
+3. Copy folder app, database, public ke ROOT project Laravel lokal.
+   Pilih Merge/Replace apabila Windows meminta konfirmasi.
+   Jangan menyalin seluruh project, cukup file-file patch ini.
+4. Buka terminal pada ROOT Laravel dan jalankan:
+      php artisan migrate
+      php artisan optimize:clear
+      php artisan route:list --path=admin/cycle-cancel
+5. Refresh browser dengan Ctrl+F5, lalu login sebagai pembuat cycle.
+
+ALUR
+- Halaman Cycle Stock Opname -> kolom Aksi -> Batalkan.
+- Tombol tampil untuk role ADMIN / ADMIN_GUDANG yang berhak akses
+  menu Cycle Opname dan hanya jika created_by = user login.
+- DRAFT/OPEN/CLOSED dapat dibatalkan dengan alasan (10-500 karakter).
+- FINALIZED dan BATAL TIDAK dapat dibatalkan.
+- Status menjadi BATAL. Snapshot/scan/assignment tetap tersimpan.
+- Sesi scan yang masih aktif dihentikan. Alasan/waktu/pelaku tercatat.
+- Filter Status akan memiliki pilihan BATAL setelah script termuat.
+
+FILE YANG BERUBAH
+app/Providers/AppServiceProvider.php                     (replace)
+app/Http/Middleware/GeraiCycleOverlay.php                (replace)
+app/Http/Controllers/Admin/CycleListController.php       (replace)
+app/Http/Controllers/Admin/CycleCancellationController.php (baru)
+public/assets/js/stock-cycle-cancel.js                   (baru)
+database/migrations/2026_11_19_234800_add_cancellation_to_stock_opname_cycles.php (baru)
+
+PENTING
+- Migration diperlukan sebelum menggunakan tombol Batalkan.
+- Ini bukan operasi delete; data audit tetap ada.
+- Belum diuji end-to-end pada instalasi dan database lokal Anda.
+- Pastikan tidak menimpa perubahan lain yang Anda lakukan sendiri pada
+  AppServiceProvider, middleware overlay, atau CycleListController.

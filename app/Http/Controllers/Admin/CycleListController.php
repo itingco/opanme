@@ -19,7 +19,7 @@ class CycleListController extends Controller
         $perPage = (int) $request->query('per_page', 20);
 
         if (! in_array($database, ['AS_INGCO', 'AS_SMI'], true)) $database = '';
-        if (! in_array($status, ['DRAFT', 'OPEN', 'CLOSED', 'FINALIZED'], true)) $status = '';
+        if (! in_array($status, ['DRAFT', 'OPEN', 'CLOSED', 'FINALIZED', 'BATAL'], true)) $status = '';
         if (! in_array($perPage, [10, 20, 50, 100], true)) $perPage = 20;
 
         $cycles = StockOpnameCycle::query()

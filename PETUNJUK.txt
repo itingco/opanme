@@ -1,40 +1,27 @@
-PATCH V3 — PERBAIKAN OVERRIDE PER ITEM SAAT OPEN
+PATCH CYCLE GERAI + AUDITOR (berdasarkan main itingco/opanme pada 19 Nov 2026)
 
-KASUS:
-Pada tabel Summary ketika cycle berstatus OPEN, kolom Override / Audit hanya menampilkan "Belum ada scan". Tombol "Override / Audit" disembunyikan oleh kondisi STATUS_CLOSED di Blade meskipun backend sebelumnya sudah diubah.
+PENTING: Ini adalah installer patch berbasis source asli, BUKAN ZIP file jadi yang langsung ditimpa.
+Repo dapat dibaca tetapi pengunduhan seluruh source langsung ke container dan penulisan branch GitHub tidak tersedia.
 
-ISI:
-APPLY_FIX_OPEN_ROW.php (installer aman, menyesuaikan dua file existing).
+1. Backup project Laravel dan DATABASE lebih dulu.
+2. Ekstrak ZIP installer ke folder terpisah, bukan ke project.
+3. Pada PC Windows dengan Python 3 jalankan dari Command Prompt:
+   python APPLY_PATCH.py "C:\xampp82\htdocs\opanme"
+   GANTI lokasi di dalam tanda petik sesuai folder project Laravel lokal yang benar.
+4. Installer mengedit source Laravel lokal dan menghasilkan CHANGED_FILES_ONLY.zip
+   dalam folder installer. ZIP ini memuat HANYA file yang diubah, sesuai struktur folder Laravel.
+5. Salinan file sebelum patch ada di folder BACKUP_ORIGINAL untuk rollback.
+6. Di root Laravel jalankan:
+   php artisan optimize:clear
+   php artisan route:list --path=cycle-audit
+   php artisan route:list --path=gerai-admin
+7. Login sebagai Admin, buat user role CYCLE_AUDITOR untuk akses audit baca-saja.
+8. Uji cycle GERAI: scan UOM 1 dan UOM besar, qty 1 dan ubah, lihat konversi, tutup.
+9. Uji pembatalan: Admin Gerai pemilik dapat membatalkan OPEN/CLOSED, akun lain harus 403.
+10. Uji audit: user Auditor melihat hanya CLOSED / FINALIZED dan tidak punya endpoint override.
 
-FILE YANG DIUBAH DI PROJECT LOKAL:
-1. resources/views/admin/cycles/summary.blade.php
-2. app/Http/Controllers/Admin/CycleController.php
+Tidak perlu migrate untuk patch ini. Status batal = BATAL; scan history tidak dihapus.
+PENTING: tidak ada pengujian runtime pada ERP/DB aplikasi Anda dari sini.
 
-CARA PASANG (setelah patch V1 dan V2 sebelumnya):
-1. Backup project/database.
-2. Ekstrak file ZIP ini ke root Laravel, folder yang berisi artisan.
-3. Jalankan: php APPLY_FIX_OPEN_ROW.php
-4. Jalankan: php artisan optimize:clear
-5. Refresh browser dengan Ctrl+F5.
-
-PERILAKU:
-- OPEN: tombol Override / Audit muncul untuk setiap baris ERP dan Non-System walaupun 0 scan.
-- OPEN / CLOSED: admin dapat Simpan Override dan Hapus Override, termasuk pada baris yang belum discan.
-- Saat OPEN, Scan Fisik tetap bisa bertambah; Final Fisik tetap menggunakan override selama ada.
-- FINALIZED: readonly seperti sebelumnya.
-- Proses CLOSE dan FINALIZE tidak diubah.
-- Tidak ada migration database, perubahan composer, atau reset data.
-
-UJICOBA:
-1. Pilih cycle OPEN lalu buka halaman Summary.
-2. Di baris dengan "Belum ada scan", pastikan tombol "Override / Audit" muncul.
-3. Set Qty Override = 0 dan comment, simpan. Pastikan Final Fisik = 0, tetapi nilai Override tampil 0 (bukan '-').
-4. Set Qty Override = 5, lalu cek Final Fisik = 5.
-5. Hapus override dan pastikan Final Fisik kembali ke Scan Fisik.
-6. Close cycle, edit override tetap diperbolehkan.
-7. Finalize cycle, edit override harus hilang.
-
-CATATAN:
-Installer membuat file *.before-fix-open-row-YYYYMMDDHHMMSS.bak untuk setiap file yang dimodifikasi.
-Installer hanya mengubah kondisi di editor yang relevan; kondisi khusus finalisasi tetap utuh.
-Jika muncul FORMAT BERBEDA/ERROR, installer tidak menimpa file, dan project lokal perlu disesuaikan.
+CATATAN: Penerapan ditargetkan untuk revisi repo yang diperiksa. Jika terjadi 'Anchor tidak ditemukan',
+berarti source lokal berbeda; rollback BACKUP_ORIGINAL dan jangan lanjut sebelum disesuaikan.

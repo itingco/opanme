@@ -14,6 +14,10 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->bind(SampleCheckingService::class, GeraiCycleCheckingService::class);
+        $this->app->bind(\App\Http\Controllers\Admin\CycleController::class, \App\Http\Controllers\Admin\CombinedCycleController::class);
+        $this->app->bind(\App\Services\CycleSnapshotService::class, \App\Services\CombinedCycleSnapshotService::class);
+        $this->app->bind(\App\Http\Controllers\Admin\BulkCycleOverrideController::class, \App\Http\Controllers\Admin\CombinedBulkCycleOverrideController::class);
+        $this->app->bind(\App\Http\Controllers\Admin\CycleSamplingItemHistoryController::class, \App\Http\Controllers\Admin\CombinedCycleSamplingHistoryController::class);
     }
 
     public function boot(): void
@@ -47,6 +51,13 @@ class AppServiceProvider extends ServiceProvider
             Route::middleware(['web', 'auth', 'role:ADMIN,ADMIN_GERAI'])
                 ->patch('/gerai-admin/cycles/{sampleCycle}/cancel', [\App\Http\Controllers\Gerai\GeraiCycleActionController::class, 'cancel'])
                 ->name('gerai.admin.cancel');
+            Route::middleware(['web','auth','role:ADMIN'])
+                ->prefix('admin/cycle-combined')->name('admin.cycles.')->group(function (): void {
+                    Route::get('/{cycle}/allocation', [\App\Http\Controllers\Admin\CombinedCycleAllocationController::class,'show'])->name('combined-allocation');
+                    Route::post('/{cycle}/allocation/{itemId}', [\App\Http\Controllers\Admin\CombinedCycleAllocationController::class,'save'])->name('combined-allocation.save');
+                    Route::delete('/{cycle}/allocation/{itemId}', [\App\Http\Controllers\Admin\CombinedCycleAllocationController::class,'reset'])->name('combined-allocation.reset');
+                    Route::get('/{cycle}/allocation-export', [\App\Http\Controllers\Admin\CombinedCycleAllocationController::class,'export'])->name('combined-allocation.export');
+                });
         });
 
         // Script overlay ditempel ke HTML halaman scanner; kode scanner lama tetap digunakan.

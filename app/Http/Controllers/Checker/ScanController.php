@@ -4,19 +4,21 @@ namespace App\Http\Controllers\Checker;
 
 use App\Http\Controllers\Controller;
 use App\Models\ScanSession;
+use App\Services\CycleBarcodeScanService;
 use App\Services\ScanService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class ScanController extends Controller
 {
-    public function store(Request $request, ScanSession $session, ScanService $service): JsonResponse
+    public function store(Request $request, ScanSession $session, CycleBarcodeScanService $service): JsonResponse
     {
         $data = $request->validate([
             'barcode' => ['required', 'string', 'max:150'],
+            'qty' => ['nullable', 'numeric', 'min:0.0001', 'max:999999999'],
+            'photo' => ['nullable', 'string', 'max:8500000'],
         ]);
-
-        return response()->json($service->scan($request->user(), $session, $data['barcode']));
+        return response()->json($service->scan($request->user(), $session, $data['barcode'], $data['qty'] ?? null, $data['photo'] ?? null));
     }
 
     public function storeNonSystem(Request $request, ScanSession $session, ScanService $service): JsonResponse
@@ -29,7 +31,6 @@ class ScanController extends Controller
             'smallest_uom_code' => ['required', 'string', 'max:50'],
             'ratio_to_smallest' => ['required', 'numeric', 'gt:0'],
         ]);
-
         return response()->json($service->storeNonSystemScan($request->user(), $session, $data));
     }
 }
